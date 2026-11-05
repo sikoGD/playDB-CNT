@@ -1,0 +1,8 @@
+build/
+dist/
+__pycache__/
+*.spec
+*.key
+prod.keys
+title.keys
+launcher_settings.json

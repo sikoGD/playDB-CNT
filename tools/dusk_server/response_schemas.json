@@ -1,0 +1,852 @@
+{
+ "ResponseGetPingServerUrlsParams": {
+  "index": 0,
+  "parser": "0x223f90",
+  "fields": {
+   "ping_servers": [
+    "object@223d20",
+    {
+     "matching_region_id": "int",
+     "ping_server_url": "string"
+    }
+   ]
+  }
+ },
+ "ResponseCreateSessionParams": {
+  "index": 1,
+  "parser": "0x224510",
+  "fields": {
+   "player_id": "int",
+   "player_id_with_signature": {
+    "object@223af0": {
+     "player_id_document": "string",
+     "signature_base64": "string"
+    }
+   },
+   "display_user_id": "string",
+   "user_id": "string",
+   "client_ip": "string",
+   "redirect_addr": "string",
+   "required_relogin_sec": "int",
+   "environment_name": "string",
+   "show_environment_name_in_lobby": "bool"
+  }
+ },
+ "ResponseDeleteSessionParams": {
+  "index": 2,
+  "parser": "0x224b50",
+  "fields": {
+   "millisecond": "int"
+  }
+ },
+ "ResponseGetLoginPlayerStateParams": {
+  "index": 3,
+  "parser": "0x22c540",
+  "fields": {
+   "login_player_states": [
+    "object@229400",
+    {
+     "login_player_id": {
+      "object@229190": {
+       "player_id": "int",
+       "pseudo_device_id": "string"
+      }
+     },
+     "login_player_type": "string"
+    }
+   ]
+  }
+ },
+ "ResponseDebugCommandParams": {
+  "index": 4,
+  "parser": "0x225c40",
+  "fields": {
+   "param": {
+    "object@238660": {
+     "type": "string",
+     "value": "tagNone@0x2204e0"
+    }
+   }
+  }
+ },
+ "ResponseServerPingParams": {
+  "index": 5,
+  "parser": "0x224b60",
+  "fields": {
+   "millisecond": "int"
+  }
+ },
+ "ResponsePollingParams": {
+  "index": 6,
+  "parser": "0x21c39c",
+  "fields": null
+ },
+ "ResponseCheckAliveParams": {
+  "index": 7,
+  "parser": "0x224d10",
+  "fields": {
+   "region": "string",
+   "status": "string"
+  }
+ },
+ "ResponseGetAnnounceMessageListParams": {
+  "index": 8,
+  "parser": "0x226030",
+  "fields": {
+   "to_all_msg": [
+    "string"
+   ],
+   "to_player_msg": [
+    "string"
+   ]
+  }
+ },
+ "ResponseGetIngameNotificationsParams": {
+  "index": 9,
+  "parser": "0x226820",
+  "fields": {
+   "notifications": [
+    "object@226520",
+    {
+     "message": "string",
+     "seq": "int",
+     "start_at": {
+      "object@223310": {
+       "seconds": "int"
+      }
+     }
+    }
+   ]
+  }
+ },
+ "ResponseUpdateLoginPlayerCharacterParams": {
+  "index": 10,
+  "parser": "0x226b30",
+  "fields": {
+   "new_character_id": "int"
+  }
+ },
+ "ResponseGlobalEventLogParams": {
+  "index": 11,
+  "parser": "0x21c6c4",
+  "fields": null
+ },
+ "ResponseSystemOptionLogParams": {
+  "index": 12,
+  "parser": "0x21c73c",
+  "fields": null
+ },
+ "ResponseUploadFamilySharingInfoParams": {
+  "index": 13,
+  "parser": "0x21c7b4",
+  "fields": null
+ },
+ "ResponseUploadGuardITCodeParams": {
+  "index": 14,
+  "parser": "0x21c82c",
+  "fields": null
+ },
+ "ResponseRegisterRoomParams": {
+  "index": 15,
+  "parser": "0x229900",
+  "fields": {
+   "room_id": "int",
+   "public_key_base64": "string"
+  }
+ },
+ "ResponseWaitForAssigningRoomParams": {
+  "index": 16,
+  "parser": "0x22a190",
+  "fields": {
+   "has_result": "bool",
+   "body": {
+    "object@229b70": {
+     "game_mode": "string",
+     "assigning_room": {
+      "object@227e30": {
+       "match_id": "int",
+       "room_spec": {
+        "object@226e50": {
+         "game_mode": "string",
+         "game_rule": "string",
+         "rule_type": "string",
+         "team_rule": "string",
+         "regulation_version": "int",
+         "executable_version": "int"
+        }
+       },
+       "is_allowed_bot": "bool",
+       "player_infos": [
+        "object@2279e0",
+        {
+         "player_id": "int",
+         "display_user_id": "string",
+         "main_role_id": "int",
+         "received_role_id": "int",
+         "received_role_player_id_1": "int",
+         "received_role_player_id_2": "int",
+         "duo_team": "string"
+        }
+       ]
+      }
+     },
+     "assigning_custom_room": {
+      "object@228d50": {
+       "invite_code": "int",
+       "room_info": {
+        "object@228770": {
+         "max_member_num": "int",
+         "game_rule": "string",
+         "team_rule": "string",
+         "map_rule": {
+          "object@228410": {
+           "map_rule_type": "string",
+           "map_uid": "int"
+          }
+         },
+         "enabled_bot": "bool",
+         "phase": "int",
+         "phase_time_sec": [
+          "int"
+         ],
+         "remaining_time_until_opened_safe_area_sec": [
+          "int"
+         ]
+        }
+       },
+       "owener_player_id": "int"
+      }
+     }
+    }
+   }
+  }
+ },
+ "ResponseMatchingTicketParams": {
+  "index": 17,
+  "parser": "0x22a730",
+  "fields": {
+   "matching_request_id": "int",
+   "now_rank_point": "int"
+  }
+ },
+ "ResponseCancelMatchingTicketParams": {
+  "index": 18,
+  "parser": "0x22a960",
+  "fields": {
+   "matchable_player_num": "int"
+  }
+ },
+ "ResponseWaitForMatchingTicketResultParams": {
+  "index": 19,
+  "parser": "0x22b180",
+  "fields": {
+   "result_type": "string",
+   "body_waiting_matching": {
+    "object@22a970": {
+     "matchable_player_num": "int"
+    }
+   },
+   "body_matched": {
+    "object@22ab10": {
+     "matching_ticket_type": "string",
+     "p2p_host_info": [
+      "int"
+     ],
+     "match_id": "int",
+     "normal_matching_result": "?reader 0x22af10",
+     "event_matching_result": {
+      "object@227840": {
+       "event_match_type": "int"
+      }
+     }
+    }
+   }
+  }
+ },
+ "ResponseGetMatchingPlayerNumParams": {
+  "index": 20,
+  "parser": "0x22b860",
+  "fields": {
+   "matching_player_num": "int"
+  }
+ },
+ "ResponseForceMatchingEndParams": {
+  "index": 21,
+  "parser": "0x21ce3c",
+  "fields": null
+ },
+ "ResponseNotifyCreateSessionParams": {
+  "index": 22,
+  "parser": "0x21ceb4",
+  "fields": null
+ },
+ "ResponseKeepRoomParams": {
+  "index": 23,
+  "parser": "0x21cf2c",
+  "fields": null
+ },
+ "ResponseDeleteRoomParams": {
+  "index": 24,
+  "parser": "0x22ba30",
+  "fields": {
+   "player_id_with_signature": {
+    "object@223af0": {
+     "player_id_document": "string",
+     "signature_base64": "string"
+    }
+   }
+  }
+ },
+ "ResponseGetSignedPlayerIDParams": {
+  "index": 25,
+  "parser": "0x22ba40",
+  "fields": {
+   "player_id_with_signature": {
+    "object@223af0": {
+     "player_id_document": "string",
+     "signature_base64": "string"
+    }
+   }
+  }
+ },
+ "ResponseEnableVisitParams": {
+  "index": 26,
+  "parser": "0x22bc00",
+  "fields": {
+   "player_id": "int",
+   "display_user_id": "string"
+  }
+ },
+ "ResponseWaitForVisitorParams": {
+  "index": 27,
+  "parser": "0x22c180",
+  "fields": {
+   "has_result": "bool",
+   "body": {
+    "object@22be80": {
+     "players": [
+      "object@22bc10",
+      {
+       "player_id": "int",
+       "display_user_id": "string"
+      }
+     ]
+    }
+   }
+  }
+ },
+ "ResponseDisableVisitParams": {
+  "index": 28,
+  "parser": "0x21d20c",
+  "fields": null
+ },
+ "ResponseStartDebugMatchParams": {
+  "index": 29,
+  "parser": "0x21d284",
+  "fields": null
+ },
+ "ResponseStopDebugMatchParams": {
+  "index": 30,
+  "parser": "0x22c530",
+  "fields": {
+   "login_player_states": [
+    "object@229400",
+    {
+     "login_player_id": {
+      "object@229190": {
+       "player_id": "int",
+       "pseudo_device_id": "string"
+      }
+     },
+     "login_player_type": "string"
+    }
+   ]
+  }
+ },
+ "ResponseGetPlayerRankParams": {
+  "index": 31,
+  "parser": "0x22cf80",
+  "fields": {
+   "rank": "int",
+   "point": "int",
+   "lower_limit_point": "int",
+   "upper_limit_point": "int",
+   "promotion_chance_count": "int"
+  }
+ },
+ "ResponseGetPlayerRankListParams": {
+  "index": 32,
+  "parser": "0x22d300",
+  "fields": {
+   "verify_multiple_login_result": "string",
+   "rank_infos": [
+    "object@22c850",
+    {
+     "rank": "int",
+     "point": "int",
+     "is_promotion_battle": "bool",
+     "min_player_rank_point": "int"
+    }
+   ],
+   "login_player_states": [
+    "object@229400",
+    {
+     "login_player_id": {
+      "object@229190": {
+       "player_id": "int",
+       "pseudo_device_id": "string"
+      }
+     },
+     "login_player_type": "string"
+    }
+   ]
+  }
+ },
+ "ResponseAddRankMatchProgressParams": {
+  "index": 33,
+  "parser": "0x22d8b0",
+  "fields": {
+   "verify_multiple_login_result": "string",
+   "player_ids": [
+    "int"
+   ],
+   "login_player_states": [
+    "object@229400",
+    {
+     "login_player_id": {
+      "object@229190": {
+       "player_id": "int",
+       "pseudo_device_id": "string"
+      }
+     },
+     "login_player_type": "string"
+    }
+   ]
+  }
+ },
+ "ResponseAddRankMatchResultParams": {
+  "index": 34,
+  "parser": "0x22dbe0",
+  "fields": {
+   "verify_multiple_login_result": "string",
+   "updated_ranks": [
+    "object@22cb60",
+    {
+     "player_id": "int",
+     "rank": "int",
+     "point": "int",
+     "promotion_chance_count": "int",
+     "is_protected_rank_floor": "bool",
+     "server_reward_ids": [
+      "int"
+     ]
+    }
+   ],
+   "login_player_states": [
+    "object@229400",
+    {
+     "login_player_id": {
+      "object@229190": {
+       "player_id": "int",
+       "pseudo_device_id": "string"
+      }
+     },
+     "login_player_type": "string"
+    }
+   ]
+  }
+ },
+ "ResponseCreateCustomRoomParams": {
+  "index": 35,
+  "parser": "0x22ed90",
+  "fields": {
+   "creating_custom_room_request_id": "int"
+  }
+ },
+ "ResponseWaitForCreateCustomRoomParams": {
+  "index": 36,
+  "parser": "0x22f130",
+  "fields": {
+   "has_result": "bool",
+   "body": {
+    "object@22ef30": {
+     "p2p_host_info": [
+      "int"
+     ]
+    }
+   }
+  }
+ },
+ "ResponseUpdateCustomRoomParams": {
+  "index": 37,
+  "parser": "0x22f4f0",
+  "fields": {
+   "room_infos": [
+    "object@22e9d0",
+    {
+     "room_id": "int",
+     "room_info": {
+      "object@22e160": {
+       "joining_member_num": "int",
+       "max_member_num": "int",
+       "room_state": "string",
+       "game_rule": "string",
+       "team_rule": "string",
+       "map_rule": {
+        "object@228410": {
+         "map_rule_type": "string",
+         "map_uid": "int"
+        }
+       },
+       "enabled_bot": "bool",
+       "phase": "int",
+       "phase_time_sec": [
+        "int"
+       ],
+       "remaining_time_until_opened_safe_area_sec": [
+        "int"
+       ]
+      }
+     }
+    }
+   ]
+  }
+ },
+ "ResponseGetCustomRoomListParams": {
+  "index": 38,
+  "parser": "0x22f500",
+  "fields": {
+   "room_infos": [
+    "object@22e9d0",
+    {
+     "room_id": "int",
+     "room_info": {
+      "object@22e160": {
+       "joining_member_num": "int",
+       "max_member_num": "int",
+       "room_state": "string",
+       "game_rule": "string",
+       "team_rule": "string",
+       "map_rule": {
+        "object@228410": {
+         "map_rule_type": "string",
+         "map_uid": "int"
+        }
+       },
+       "enabled_bot": "bool",
+       "phase": "int",
+       "phase_time_sec": [
+        "int"
+       ],
+       "remaining_time_until_opened_safe_area_sec": [
+        "int"
+       ]
+      }
+     }
+    }
+   ]
+  }
+ },
+ "ResponseJoinCustomRoomByRoomIdParams": {
+  "index": 39,
+  "parser": "0x22f880",
+  "fields": {
+   "p2p_host_info": [
+    "int"
+   ]
+  }
+ },
+ "ResponseJoinCustomRoomByInviteCodeParams": {
+  "index": 40,
+  "parser": "0x22fa80",
+  "fields": {
+   "p2p_host_info": [
+    "int"
+   ]
+  }
+ },
+ "ResponseGetTicketCreatingCustomRoomParams": {
+  "index": 41,
+  "parser": "0x22fc80",
+  "fields": {
+   "ticket": {
+    "object@22e7a0": {
+     "remaining_count": "int",
+     "is_infinite": "bool"
+    }
+   }
+  }
+ },
+ "ResponseConsumeTicketCreatingCustomRoomParams": {
+  "index": 42,
+  "parser": "0x22ff70",
+  "fields": {
+   "ticket": {
+    "object@22e7a0": {
+     "remaining_count": "int",
+     "is_infinite": "bool"
+    }
+   }
+  }
+ },
+ "ResponseDeleteCustomRoomParams": {
+  "index": 43,
+  "parser": "0x230120",
+  "fields": {
+   "player_id": "int",
+   "score": "int",
+   "display_data": "string",
+   "display_rank": "int",
+   "index_rank": "int"
+  }
+ },
+ "ResponseRegisterOfferingRankingParams": {
+  "index": 44,
+  "parser": "0x21df18",
+  "fields": null
+ },
+ "ResponseRegisterPlayerInfoParams": {
+  "index": 45,
+  "parser": "0x230520",
+  "fields": {
+   "ranking_list": [
+    "object@230130",
+    {
+     "player_id": "int",
+     "score": "int",
+     "display_data": "string",
+     "display_rank": "int",
+     "index_rank": "int"
+    }
+   ]
+  }
+ },
+ "ResponseGetRankingByRankParams": {
+  "index": 46,
+  "parser": "0x230530",
+  "fields": {
+   "ranking_list": [
+    "object@230130",
+    {
+     "player_id": "int",
+     "score": "int",
+     "display_data": "string",
+     "display_rank": "int",
+     "index_rank": "int"
+    }
+   ]
+  }
+ },
+ "ResponseGetRankingParams": {
+  "index": 47,
+  "parser": "0x230840",
+  "fields": {
+   "ranking": {
+    "object@230130": {
+     "player_id": "int",
+     "score": "int",
+     "display_data": "string",
+     "display_rank": "int",
+     "index_rank": "int"
+    }
+   }
+  }
+ },
+ "ResponseGetRankingPlayerInfoParams": {
+  "index": 48,
+  "parser": "0x230b90",
+  "fields": {
+   "player_detail_data": "string",
+   "display_user_id": "string"
+  }
+ },
+ "ResponseGetGrantedRewardsParams": {
+  "index": 49,
+  "parser": "0x230ff0",
+  "fields": {
+   "server_reward_ids": [
+    "int"
+   ]
+  }
+ },
+ "ResponseHasPlayerGrantedRewardsParams": {
+  "index": 50,
+  "parser": "0x2311f0",
+  "fields": {
+   "player_id": "int",
+   "reward_infos": [
+    "object@230dc0",
+    {
+     "server_reward_id": "int",
+     "is_granted": "bool"
+    }
+   ]
+  }
+ },
+ "ResponseGetBotPlayerInfoParams": {
+  "index": 51,
+  "parser": "0x2315c0",
+  "fields": {
+   "player_detail_data": "string"
+  }
+ },
+ "ResponseGetRankRuleMasterParams": {
+  "index": 52,
+  "parser": "0x231da0",
+  "fields": {
+   "rank_rule_master": [
+    "object@2317b0",
+    {
+     "rank": "int",
+     "start_point": "int",
+     "rank_tier": "int",
+     "is_need_promotion_battle": "bool",
+     "failed_promotion_battle_penalty_point": "int",
+     "rank_floor_protection_count": "int",
+     "server_reward_id": "int"
+    }
+   ]
+  }
+ },
+ "ResponseGetNeighborMatchingRegionMasterParams": {
+  "index": 53,
+  "parser": "0x232100",
+  "fields": {
+   "matching_region_groups": [
+    "object@231ba0",
+    {
+     "matching_region_ids": [
+      "int"
+     ]
+    }
+   ]
+  }
+ },
+ "ResponseRegisterReportParams": {
+  "index": 54,
+  "parser": "0x232410",
+  "fields": {
+   "report_id": "int"
+  }
+ },
+ "ResponseCreateRoomDebugParams": {
+  "index": 55,
+  "parser": "0x2332b0",
+  "fields": {
+   "room_id": "int"
+  }
+ },
+ "ResponseUpdateRoomDebugParams": {
+  "index": 56,
+  "parser": "0x21e8d4",
+  "fields": null
+ },
+ "ResponseDeleteRoomDebugParams": {
+  "index": 57,
+  "parser": "0x233460",
+  "fields": {
+   "room_info": {
+    "object@232d50": {
+     "spec": {
+      "object@2325b0": {
+       "keyword": "string",
+       "max_member_num": "int",
+       "battle_rule": "int",
+       "time_limit": "int",
+       "map_type": "int",
+       "team_join": "int",
+       "visibility": "int",
+       "region": "string",
+       "regulation_version": "int"
+      }
+     },
+     "state": {
+      "object@232a50": {
+       "cur_member_num": "int",
+       "can_join": "bool",
+       "can_join_dark_event": "bool",
+       "dropout_member_num": "int"
+      }
+     },
+     "p2p_host_info": [
+      "int"
+     ]
+    }
+   }
+  }
+ },
+ "ResponseGetRoomDebugParams": {
+  "index": 58,
+  "parser": "0x233470",
+  "fields": {
+   "room_info": {
+    "object@232d50": {
+     "spec": {
+      "object@2325b0": {
+       "keyword": "string",
+       "max_member_num": "int",
+       "battle_rule": "int",
+       "time_limit": "int",
+       "map_type": "int",
+       "team_join": "int",
+       "visibility": "int",
+       "region": "string",
+       "regulation_version": "int"
+      }
+     },
+     "state": {
+      "object@232a50": {
+       "cur_member_num": "int",
+       "can_join": "bool",
+       "can_join_dark_event": "bool",
+       "dropout_member_num": "int"
+      }
+     },
+     "p2p_host_info": [
+      "int"
+     ]
+    }
+   }
+  }
+ },
+ "ResponseGetRoomListDebugParams": {
+  "index": 59,
+  "parser": "0x2337a0",
+  "fields": {
+   "room_infos": [
+    "object@232d50",
+    {
+     "spec": {
+      "object@2325b0": {
+       "keyword": "string",
+       "max_member_num": "int",
+       "battle_rule": "int",
+       "time_limit": "int",
+       "map_type": "int",
+       "team_join": "int",
+       "visibility": "int",
+       "region": "string",
+       "regulation_version": "int"
+      }
+     },
+     "state": {
+      "object@232a50": {
+       "cur_member_num": "int",
+       "can_join": "bool",
+       "can_join_dark_event": "bool",
+       "dropout_member_num": "int"
+      }
+     },
+     "p2p_host_info": [
+      "int"
+     ]
+    }
+   ]
+  }
+ },
+ "ResponseUploadPlaylogParams": {
+  "index": 60,
+  "parser": "0x21ec1c",
+  "fields": null
+ }
+}
