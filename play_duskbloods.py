@@ -397,7 +397,7 @@ def run_gui():
     emu_frame = section('Emulator')
     emulators = default_emulators()
     saved_emulator = settings.get('emulator')
-    if saved_emulator and Pathsafe_is_file(saved_emulator) and \
+    if saved_emulator and safe_is_file(saved_emulator) and \
             Path(saved_emulator).resolve() not in [e.resolve() for e in emulators]:
         emulators.insert(0, Path(saved_emulator))
     labels = [emulator_label(e) for e in emulators]
@@ -405,7 +405,7 @@ def run_gui():
     combo = ttk.Combobox(emu_frame, textvariable=emu_var, values=labels, state='readonly',
                          style='Dusk.TCombobox', font=(SERIF, 10))
     combo.pack(side='left', fill='x', expand=True, ipady=3)
-    if saved_emulator and Pathsafe_is_file(saved_emulator):
+    if saved_emulator and safe_is_file(saved_emulator):
         for exe, label in zip(emulators, labels):
             if exe.resolve() == Path(saved_emulator).resolve():
                 emu_var.set(label)
