@@ -33,6 +33,20 @@ FRONT = TOOLS / 'dusk_server'
 SETTINGS = HERE / 'launcher_settings.json'
 
 
+def safe_is_file(path):
+    try:
+        return Path(path).is_file()
+    except OSError:  # protected or unreadable locations (for example Windows app folders)
+        return False
+
+
+def safe_is_dir(path):
+    try:
+        return Path(path).is_dir()
+    except OSError:
+        return False
+
+
 # --- Game and emulator discovery ------------------------------------------------------------
 
 def is_game(main_file):
@@ -62,7 +76,7 @@ def default_game_folders():
 
 def emulator_exe_in(folder):
     for name in EMULATOR_NAMES:
-        if (Path(folder) / name).is_file():
+        if safe_is_file(Path(folder) / name):
             return Path(folder) / name
     return None
 
@@ -76,12 +90,12 @@ def default_emulators():
         roots += [parent / 'DB-Eglantine Windows Builds', parent / 'build-msvc/bin', parent / 'Lichii']
     roots.append(Path.home() / 'Downloads/Lichii')
     for root in roots:
-        if not root.is_dir():
+        if not safe_is_dir(root):
             continue
         if (exe := emulator_exe_in(root)):
             found.append(exe)
         try:
-            children = sorted((p for p in root.iterdir() if p.is_dir()), reverse=True)
+            children = sorted((p for p in root.iterdir() if safe_is_dir(p)), reverse=True)
         except OSError:
             continue
         for child in children:
@@ -103,17 +117,17 @@ def emulator_label(exe):
 def data_dir_for(exe):
     """Portable builds keep their data in <folder>/user; Lichii and Eden use %APPDATA%\\eden."""
     portable = exe.parent / 'user'
-    if portable.is_dir():
+    if safe_is_dir(portable):
         return portable
     appdata = Path(os.environ.get('APPDATA', Path.home() / 'AppData/Roaming'))
     for name in ('eden', 'lichii', 'eglantine', 'yuzu'):
-        if (appdata / name).is_dir():
+        if safe_is_dir(appdata / name):
             return appdata / name
     return appdata / 'eden'
 
 
 def test_dir_for(data):
-    return data / 'test_data' if (data / 'test_data').is_dir() else data / 'duskbloods_test'
+    return data / 'test_data' if safe_is_dir(data / 'test_data') else data / 'duskbloods_test'
 
 
 # --- Launch ---------------------------------------------------------------------------------
@@ -165,7 +179,7 @@ class Session:
 
     def seed(self):
         nand, save = self.test / 'nand', self.test / 'save'
-        seed = next((p / 'seed' for p in (self.emulator.parent, HERE) if (p / 'seed').is_dir()), None)
+        seed = next((p / 'seed' for p in (self.emulator.parent, HERE) if safe_is_dir(p / 'seed')), None)
         if not nand.exists():
             if seed and (seed / 'nand').exists():
                 shutil.copytree(seed / 'nand', nand)
@@ -383,7 +397,7 @@ def run_gui():
     emu_frame = section('Emulator')
     emulators = default_emulators()
     saved_emulator = settings.get('emulator')
-    if saved_emulator and Path(saved_emulator).is_file() and \
+    if saved_emulator and Pathsafe_is_file(saved_emulator) and \
             Path(saved_emulator).resolve() not in [e.resolve() for e in emulators]:
         emulators.insert(0, Path(saved_emulator))
     labels = [emulator_label(e) for e in emulators]
@@ -391,7 +405,7 @@ def run_gui():
     combo = ttk.Combobox(emu_frame, textvariable=emu_var, values=labels, state='readonly',
                          style='Dusk.TCombobox', font=(SERIF, 10))
     combo.pack(side='left', fill='x', expand=True, ipady=3)
-    if saved_emulator and Path(saved_emulator).is_file():
+    if saved_emulator and Pathsafe_is_file(saved_emulator):
         for exe, label in zip(emulators, labels):
             if exe.resolve() == Path(saved_emulator).resolve():
                 emu_var.set(label)
@@ -450,7 +464,7 @@ def run_gui():
         exe = selected_emulator()
         if exe:
             data = data_dir_for(exe)
-            keys = (data / 'keys/prod.keys').exists()
+            keys = safe_is_file(data / 'keys/prod.keys')
             emu_status.configure(text=f'{exe}\nData: {data}' + ('' if keys else '   (no prod.keys yet)'),
                                  fg=DIM if keys else '#e0745a')
         else:
