@@ -58,3 +58,15 @@ The exe appears in `dist/`. Python 3.10+ with Tk is required.
 You must provide your own legally obtained game and keys. This project is not affiliated with
 FromSoftware, Nintendo or any emulator project, and contains no copyrighted game files; the
 banner and icon are screenshots of the game's title screen used for identification only.
+
+## About
+
+Made by **sikoGD** as part of an effort to get The Duskbloods Network Test running on Switch 2
+emulators: the launcher here, plus the emulator-side work (rendering, performance, local servers)
+done alongside it.
+
+If this saved you time and you'd like to support the work:
+
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-support-d8a657?logo=buymeacoffee&logoColor=white)](https://buymeacoffee.com/rickjrbfl)
+
+https://buymeacoffee.com/rickjrbfl
