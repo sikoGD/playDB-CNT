@@ -32,7 +32,7 @@ def _tolerant(method):
 for _name in ('exists', 'is_file', 'is_dir'):
     setattr(Path, _name, _tolerant(getattr(Path, _name)))
 
-VERSION = '1.0.1'
+VERSION = '1.0.2'
 PORT = 18443
 WEB_PORT = 18090
 GAME_SHA = '2ef7b7bcd78905f30069d03aa44e1e124d83bd83bdcc1766bd3d01ea2ad137a3'
@@ -202,6 +202,40 @@ def port_in_use(port):
             return True
 
 
+def kill_tree(proc):
+    """Stop a process and everything it started. The packaged exe runs every server as a wrapper
+    process plus a child Python; terminating only the wrapper leaves the child holding its port."""
+    if proc.poll() is not None:  # already gone; its PID may be reused by an unrelated process
+        return
+    try:
+        if IS_WINDOWS:
+            subprocess.run(['taskkill', '/F', '/T', '/PID', str(proc.pid)], capture_output=True,
+                           creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0), timeout=10)
+        else:
+            import signal
+            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+    except (OSError, subprocess.SubprocessError, ProcessLookupError):
+        try:
+            proc.kill()
+        except OSError:
+            pass
+    try:
+        proc.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        pass
+
+
+def wait_for_port(port, seconds):
+    """True once nothing else is bound to `port` (polls for up to `seconds`)."""
+    end = time.monotonic() + seconds
+    while True:
+        if not port_in_use(port):
+            return True
+        if time.monotonic() >= end:
+            return False
+        time.sleep(0.25)
+
+
 def python_command(script):
     if FROZEN:
         return [sys.executable, '--run-script', str(script)]
@@ -293,6 +327,7 @@ class Session:
         run = self.run_dir
         (run / 'server_data').mkdir(parents=True)
         no_window = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
+        own_group = {} if IS_WINDOWS else {'start_new_session': True}
         pki = self.test / 'pki'
         if not (pki / 'ca.der').exists():
             self.log('Creating private test certificates for this PC (first run)...')
@@ -302,9 +337,11 @@ class Session:
                 self.log('Could not create the test certificates.', error=True)
                 return None
         if port_in_use(PORT):
-            self.log(f'Port {PORT} is already in use by another program (an earlier launcher or '
-                     'emulator session still running?). Close it and try again.', error=True)
-            return None
+            self.log('Waiting for the previous session to release its port...')
+            if not wait_for_port(PORT, 15):
+                self.log(f'Port {PORT} is still in use by another program (an earlier launcher or '
+                         'emulator session still running?). Close it and try again.', error=True)
+                return None
         upstream_port = free_port(PORT + 1)
         web_port = free_port(WEB_PORT)
         self.log('Starting the local servers (127.0.0.1 only)...')
@@ -314,7 +351,7 @@ class Session:
              '--data', str(run / 'server_data'), '--pki', str(pki),
              '--log', str(run / 'server.log')],
             cwd=SERVER, stdout=(run / 'server_console.log').open('w'), stderr=subprocess.STDOUT,
-            creationflags=no_window)
+            creationflags=no_window, **own_group)
         front_env = dict(os.environ, DUSK_REDIRECT_VALUE='nochange', DUSK_FRONTEND='1',
                          PYTHONUNBUFFERED='1')
         front = subprocess.Popen(
@@ -322,7 +359,7 @@ class Session:
             ['--port', str(PORT), '--upstream', str(upstream_port), '--ca-dir', str(pki),
              '--cert-dir', str(self.test / 'frontdoor_pki'), '--log', str(run / 'frontdoor.log')],
             cwd=FRONT, env=front_env, stdout=(run / 'frontdoor_console.log').open('w'),
-            stderr=subprocess.STDOUT, creationflags=no_window)
+            stderr=subprocess.STDOUT, creationflags=no_window, **own_group)
         self.processes = [front, server]
         time.sleep(3)
         if server.poll() is not None or front.poll() is not None:
@@ -358,13 +395,9 @@ class Session:
 
     def stop(self):
         for proc in reversed(self.processes):  # the emulator, then both servers
-            if proc.poll() is not None:
-                continue
-            proc.terminate()
-            try:
-                proc.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                proc.kill()
+            kill_tree(proc)
+        if self.processes:
+            wait_for_port(PORT, 10)
         log = self.data / 'log/eden_log.txt'
         if self.run_dir and log.exists():
             try:
