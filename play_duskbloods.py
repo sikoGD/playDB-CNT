@@ -10,17 +10,36 @@ import os
 import re
 import runpy
 import shutil
+import socket
 import subprocess
 import sys
 import threading
 import time
 from pathlib import Path
 
+
+def _tolerant(method):
+    """Unreadable folders (e.g. R:\\WpSystem -> WinError 1337) count as 'not there' instead of
+    crashing the launcher while it scans drives for emulators."""
+    def check(self, *args, **kwargs):
+        try:
+            return method(self, *args, **kwargs)
+        except (OSError, ValueError):
+            return False
+    return check
+
+
+for _name in ('exists', 'is_file', 'is_dir'):
+    setattr(Path, _name, _tolerant(getattr(Path, _name)))
+
+VERSION = '1.0.1'
 PORT = 18443
 WEB_PORT = 18090
 GAME_SHA = '2ef7b7bcd78905f30069d03aa44e1e124d83bd83bdcc1766bd3d01ea2ad137a3'
 GAME_FOLDER = 'THE DUSKBLOODS NETWORK TEST VER'
-EMULATOR_NAMES = ('eglantine.exe', 'lichii.exe', 'eden.exe', 'yuzu.exe')
+IS_WINDOWS = os.name == 'nt'
+EMULATOR_KINDS = ('eglantine', 'lichii', 'eden', 'yuzu')
+EMULATOR_NAMES = tuple(f'{kind}.exe' for kind in EMULATOR_KINDS) if IS_WINDOWS else EMULATOR_KINDS
 FROZEN = getattr(sys, 'frozen', False)
 
 HERE = Path(sys.executable).resolve().parent if FROZEN else Path(__file__).resolve().parent
@@ -31,20 +50,6 @@ SERVER = TOOLS / 'npln_server'
 PKI_SOURCE_NOTE = 'generated on first run'
 FRONT = TOOLS / 'dusk_server'
 SETTINGS = HERE / 'launcher_settings.json'
-
-
-def safe_is_file(path):
-    try:
-        return Path(path).is_file()
-    except OSError:  # protected or unreadable locations (for example Windows app folders)
-        return False
-
-
-def safe_is_dir(path):
-    try:
-        return Path(path).is_dir()
-    except OSError:
-        return False
 
 
 # --- Game and emulator discovery ------------------------------------------------------------
@@ -75,9 +80,18 @@ def default_game_folders():
 
 
 def emulator_exe_in(folder):
+    folder = Path(folder)
     for name in EMULATOR_NAMES:
-        if safe_is_file(Path(folder) / name):
-            return Path(folder) / name
+        if (folder / name).is_file():
+            return folder / name
+    if not IS_WINDOWS:  # AppImages are named like Eglantine-x86_64.AppImage
+        try:
+            for item in sorted(folder.iterdir()):
+                if item.name.lower().endswith('.appimage') and \
+                        item.name.lower().startswith(EMULATOR_KINDS) and item.is_file():
+                    return item
+        except OSError:
+            pass
     return None
 
 
@@ -89,13 +103,16 @@ def default_emulators():
     for parent in HERE.parents[:3]:
         roots += [parent / 'DB-Eglantine Windows Builds', parent / 'build-msvc/bin', parent / 'Lichii']
     roots.append(Path.home() / 'Downloads/Lichii')
+    if not IS_WINDOWS:
+        roots += [Path.home() / 'Applications', Path.home() / '.local/bin', Path.home() / 'Downloads']
+        found += [Path(path) for path in (shutil.which(name) for name in EMULATOR_KINDS) if path]
     for root in roots:
-        if not safe_is_dir(root):
+        if not root.is_dir():
             continue
         if (exe := emulator_exe_in(root)):
             found.append(exe)
         try:
-            children = sorted((p for p in root.iterdir() if safe_is_dir(p)), reverse=True)
+            children = sorted((p for p in root.iterdir() if p.is_dir()), reverse=True)
         except OSError:
             continue
         for child in children:
@@ -109,28 +126,81 @@ def default_emulators():
 
 
 def emulator_label(exe):
-    kind = {'eglantine.exe': 'Eglantine', 'lichii.exe': 'Lichii', 'eden.exe': 'Eden',
-            'yuzu.exe': 'yuzu'}.get(exe.name.lower(), exe.stem)
+    name = exe.name.lower()
+    kind = next((k.capitalize() if k != 'yuzu' else k for k in EMULATOR_KINDS if name.startswith(k)),
+                exe.stem)
     return f'{kind}  -  {exe.parent.name}'
 
 
 def data_dir_for(exe):
     """Portable builds keep their data in <folder>/user; Lichii and Eden use %APPDATA%\\eden."""
     portable = exe.parent / 'user'
-    if safe_is_dir(portable):
+    if portable.is_dir():
         return portable
-    appdata = Path(os.environ.get('APPDATA', Path.home() / 'AppData/Roaming'))
+    if IS_WINDOWS:
+        appdata = Path(os.environ.get('APPDATA', Path.home() / 'AppData/Roaming'))
+    else:  # Linux: ~/.local/share/<emulator>
+        appdata = Path(os.environ.get('XDG_DATA_HOME') or Path.home() / '.local/share')
     for name in ('eden', 'lichii', 'eglantine', 'yuzu'):
-        if safe_is_dir(appdata / name):
+        if (appdata / name).is_dir():
             return appdata / name
     return appdata / 'eden'
 
 
+def config_file_for(data):
+    """qt-config.ini: inside a portable `user` folder, else (Linux) ~/.config/<emulator>."""
+    config = data / 'config/qt-config.ini'
+    if config.exists() or IS_WINDOWS:
+        return config
+    base = Path(os.environ.get('XDG_CONFIG_HOME') or Path.home() / '.config')
+    for name in (data.name, 'eden', 'lichii', 'eglantine', 'yuzu'):
+        if (base / name / 'qt-config.ini').exists():
+            return base / name / 'qt-config.ini'
+    return config
+
+
+def open_folder(folder):
+    if IS_WINDOWS:
+        os.startfile(str(folder))
+    else:
+        subprocess.Popen(['open' if sys.platform == 'darwin' else 'xdg-open', str(folder)])
+
+
 def test_dir_for(data):
-    return data / 'test_data' if safe_is_dir(data / 'test_data') else data / 'duskbloods_test'
+    return data / 'test_data' if (data / 'test_data').is_dir() else data / 'duskbloods_test'
 
 
 # --- Launch ---------------------------------------------------------------------------------
+
+def _reuse(sock):
+    """Linux keeps closed ports in TIME_WAIT and refuses to bind them without SO_REUSEADDR (Windows
+    would instead let a second listener share the port, so it must not be set there)."""
+    if not IS_WINDOWS:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+
+
+def free_port(preferred):
+    """`preferred` if nothing is listening on it, else any free local port."""
+    for port in (preferred, 0):
+        with socket.socket() as probe:
+            _reuse(probe)
+            try:
+                probe.bind(('127.0.0.1', port))
+                return probe.getsockname()[1]
+            except OSError:
+                continue
+    return preferred
+
+
+def port_in_use(port):
+    with socket.socket() as probe:
+        _reuse(probe)
+        try:
+            probe.bind(('127.0.0.1', port))
+            return False
+        except OSError:
+            return True
+
 
 def python_command(script):
     if FROZEN:
@@ -179,7 +249,7 @@ class Session:
 
     def seed(self):
         nand, save = self.test / 'nand', self.test / 'save'
-        seed = next((p / 'seed' for p in (self.emulator.parent, HERE) if safe_is_dir(p / 'seed')), None)
+        seed = next((p / 'seed' for p in (self.emulator.parent, HERE) if (p / 'seed').is_dir()), None)
         if not nand.exists():
             if seed and (seed / 'nand').exists():
                 shutil.copytree(seed / 'nand', nand)
@@ -198,7 +268,7 @@ class Session:
         return nand, save
 
     def prepare_config(self, nand, save):
-        config = self.data / 'config/qt-config.ini'
+        config = config_file_for(self.data)
         if not config.exists():
             self.log('No qt-config.ini yet: the emulator starts with its defaults '
                      '(start it once on its own, then play from here).')
@@ -208,6 +278,10 @@ class Session:
                            ('airplane_mode', 'false'), ('use_gdbstub', 'false'),
                            ('check_for_updates', 'false')):
             text = set_key(text, key, value)
+        # A network adapter name saved on another PC (e.g. a VPN) does not exist here and makes the
+        # game report "no internet connection": always fall back to the automatic adapter.
+        text = re.sub(r'(?m)^network_interface=.*$', 'network_interface=', text)
+        text = re.sub(r'(?m)^network_interface\\default=.*$', r'network_interface\\default=true', text)
         config.write_text(text, encoding='utf-8')
 
     def start(self):
@@ -227,10 +301,16 @@ class Session:
             if made.returncode != 0 or not (pki / 'ca.der').exists():
                 self.log('Could not create the test certificates.', error=True)
                 return None
+        if port_in_use(PORT):
+            self.log(f'Port {PORT} is already in use by another program (an earlier launcher or '
+                     'emulator session still running?). Close it and try again.', error=True)
+            return None
+        upstream_port = free_port(PORT + 1)
+        web_port = free_port(WEB_PORT)
         self.log('Starting the local servers (127.0.0.1 only)...')
         server = subprocess.Popen(
             python_command(SERVER / 'npln_stub.py') +
-            ['--port', str(PORT + 1), '--host', '127.0.0.1', '--web-port', str(WEB_PORT),
+            ['--port', str(upstream_port), '--host', '127.0.0.1', '--web-port', str(web_port),
              '--data', str(run / 'server_data'), '--pki', str(pki),
              '--log', str(run / 'server.log')],
             cwd=SERVER, stdout=(run / 'server_console.log').open('w'), stderr=subprocess.STDOUT,
@@ -239,7 +319,7 @@ class Session:
                          PYTHONUNBUFFERED='1')
         front = subprocess.Popen(
             python_command(FRONT / 'frontdoor.py') +
-            ['--port', str(PORT), '--upstream', str(PORT + 1), '--ca-dir', str(pki),
+            ['--port', str(PORT), '--upstream', str(upstream_port), '--ca-dir', str(pki),
              '--cert-dir', str(self.test / 'frontdoor_pki'), '--log', str(run / 'frontdoor.log')],
             cwd=FRONT, env=front_env, stdout=(run / 'frontdoor_console.log').open('w'),
             stderr=subprocess.STDOUT, creationflags=no_window)
@@ -261,6 +341,13 @@ class Session:
                    EDEN_NX2_CRASH_DUMP=str(run), EDEN_NX2_TRACE_TERMINATE='1')
         env.update({k: v for k, v in os.environ.items() if k.startswith('EDEN_NX2_') and k not in env})
         env.pop('SDL_AUDIODRIVER', None)
+        if not IS_WINDOWS and not os.access(self.emulator, os.X_OK):
+            try:
+                os.chmod(self.emulator, self.emulator.stat().st_mode | 0o111)
+            except OSError:
+                self.log(f'{self.emulator} is not executable: run  chmod +x "{self.emulator}"', error=True)
+                self.stop()
+                return None
         console = (run / 'console.log').open('w')
         game = subprocess.Popen([str(self.emulator), '-g', str(self.game_main)],
                                 cwd=self.emulator.parent, env=env, stdout=console,
@@ -270,7 +357,9 @@ class Session:
         return game
 
     def stop(self):
-        for proc in self.processes[1:] if self.processes else []:
+        for proc in reversed(self.processes):  # the emulator, then both servers
+            if proc.poll() is not None:
+                continue
             proc.terminate()
             try:
                 proc.wait(timeout=5)
@@ -289,7 +378,8 @@ class Session:
 
 def load_settings():
     try:
-        return json.loads(SETTINGS.read_text(encoding='utf-8'))
+        data = json.loads(SETTINGS.read_text(encoding='utf-8'))
+        return data if isinstance(data, dict) else {}
     except (OSError, ValueError):
         return {}
 
@@ -313,17 +403,29 @@ def run_gui():
     TEXT = '#d8cfc4'
     DIM = '#8c8077'
     SERIF = 'Georgia'
+    MONO = 'Consolas'
 
     settings = load_settings()
     root = tk.Tk()
-    root.title('The Duskbloods - Network Test Launcher')
+    if not IS_WINDOWS:  # Georgia / Consolas are Windows fonts
+        from tkinter import font as tkfont
+        families = set(tkfont.families())
+        SERIF = next((f for f in ('DejaVu Serif', 'Liberation Serif', 'Noto Serif', 'FreeSerif')
+                      if f in families), 'serif')
+        MONO = next((f for f in ('DejaVu Sans Mono', 'Liberation Mono', 'Noto Sans Mono')
+                     if f in families), 'monospace')
+    root.title(f'The Duskbloods - Network Test Launcher {VERSION}')
     root.configure(bg=BG)
     root.resizable(False, False)
-    if (ASSETS / 'icon.ico').exists():
-        try:
+    try:
+        if IS_WINDOWS and (ASSETS / 'icon.ico').exists():
             root.iconbitmap(default=str(ASSETS / 'icon.ico'))
-        except tk.TclError:
-            pass
+        elif not IS_WINDOWS and (ASSETS / 'icon.png').exists():
+            icon_image = tk.PhotoImage(file=str(ASSETS / 'icon.png'))
+            root.iconphoto(True, icon_image)
+            root.icon_image = icon_image
+    except tk.TclError:
+        pass
 
     header = tk.Frame(root, bg='#3a2328', highlightthickness=1, highlightbackground='#5a3a3a')
     header.pack(fill='x', padx=6, pady=(6, 0))
@@ -397,7 +499,7 @@ def run_gui():
     emu_frame = section('Emulator')
     emulators = default_emulators()
     saved_emulator = settings.get('emulator')
-    if saved_emulator and Pathsafe_is_file(saved_emulator) and \
+    if saved_emulator and Path(saved_emulator).is_file() and \
             Path(saved_emulator).resolve() not in [e.resolve() for e in emulators]:
         emulators.insert(0, Path(saved_emulator))
     labels = [emulator_label(e) for e in emulators]
@@ -405,7 +507,7 @@ def run_gui():
     combo = ttk.Combobox(emu_frame, textvariable=emu_var, values=labels, state='readonly',
                          style='Dusk.TCombobox', font=(SERIF, 10))
     combo.pack(side='left', fill='x', expand=True, ipady=3)
-    if saved_emulator and Pathsafe_is_file(saved_emulator):
+    if saved_emulator and Path(saved_emulator).is_file():
         for exe, label in zip(emulators, labels):
             if exe.resolve() == Path(saved_emulator).resolve():
                 emu_var.set(label)
@@ -416,8 +518,9 @@ def run_gui():
 
     def browse_emulator():
         chosen = filedialog.askopenfilename(
-            title='Select the emulator (eglantine.exe, lichii.exe, eden.exe, yuzu.exe)',
-            filetypes=[('Emulator', ' '.join(EMULATOR_NAMES)), ('Programs', '*.exe')])
+            title='Select the emulator (Eglantine, Lichii, Eden or yuzu)',
+            filetypes=([('Emulator', ' '.join(EMULATOR_NAMES)), ('Programs', '*.exe')] if IS_WINDOWS
+                       else [('All files', '*')]))
         if chosen:
             exe = Path(chosen)
             if exe.resolve() not in [e.resolve() for e in emulators]:
@@ -439,7 +542,7 @@ def run_gui():
         return None
 
     # Status and buttons.
-    log_box = tk.Text(body, height=7, font=('Consolas', 9), bg=PANEL, fg=TEXT, relief='flat',
+    log_box = tk.Text(body, height=7, font=(MONO, 9), bg=PANEL, fg=TEXT, relief='flat',
                       highlightthickness=1, highlightbackground=EDGE, wrap='word', state='disabled')
     log_box.pack(fill='x', pady=(0, 10))
     log_box.tag_configure('error', foreground='#e0745a')
@@ -464,7 +567,7 @@ def run_gui():
         exe = selected_emulator()
         if exe:
             data = data_dir_for(exe)
-            keys = safe_is_file(data / 'keys/prod.keys')
+            keys = (data / 'keys/prod.keys').exists()
             emu_status.configure(text=f'{exe}\nData: {data}' + ('' if keys else '   (no prod.keys yet)'),
                                  fg=DIM if keys else '#e0745a')
         else:
@@ -489,7 +592,8 @@ def run_gui():
                 game = session.start()
                 if game is not None:
                     game.wait()
-                    log(f'Game closed (exit {game.returncode:#x}).')
+                    code = game.returncode
+                    log('Game closed (' + (f'exit {code:#x}' if code >= 0 else f'signal {-code}') + ').')
             except Exception as error:  # report anything to the window
                 log(f'Launch failed: {error}', error=True)
             finally:
@@ -504,7 +608,7 @@ def run_gui():
         exe = selected_emulator()
         folder = test_dir_for(data_dir_for(exe)) / 'runs' if exe else HERE
         folder.mkdir(parents=True, exist_ok=True)
-        os.startfile(str(folder))
+        open_folder(folder)
 
     play = button(buttons, 'PLAY', play_clicked, primary=True)
     play.pack(side='left', padx=8)
