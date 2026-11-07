@@ -7,7 +7,9 @@ stand-in servers, either for yourself (offline, loopback only) or for a room of 
 
 It gives you a window styled after the game's menus where you pick:
 
-* **the game folder** (the folder that contains `base/exefs/main`; the version is checked), and
+* **the game**: a **`.nup` package** (Browse; opened by emulators with NUP support, such as Eglantine
+  v30+ and Lichii) or the unpacked game **folder** that contains `base/exefs/main` (Folder). The
+  version is checked either way. And
 * **the emulator** (`eglantine.exe`, `lichii.exe`, `eden.exe` or `yuzu.exe`; on Linux `eglantine`,
   `lichii`, `eden`, `yuzu` or an AppImage), found automatically next to the launcher, in sibling
   build folders and in a `Lichii` folder, or chosen with Browse.
@@ -43,7 +45,7 @@ or router port forwards. The Online tab lists the ports.
 
 1. Download `Play Duskbloods.exe` from the Releases page, put it anywhere (next to your emulator
    build is easiest).
-2. Run it, pick the game folder and the emulator.
+2. Run it, pick the game (`.nup` file with **Browse**, or the game folder with **Folder**) and the emulator.
 3. Have your own `prod.keys` and `title.keys` in the emulator's `keys` folder (portable builds:
    `user/keys`; Lichii/Eden: `%APPDATA%\eden\keys`). The launcher tells you if they are missing.
 4. Press **Start game**. To play with friends, see [ONLINE.md](ONLINE.md).
@@ -82,7 +84,7 @@ to Linux, follow these steps in order; commands go in a terminal.
    `~/.local/share/duskbloods-launcher/venv` and installs two small libraries (`grpcio`,
    `cryptography`). Later starts are instant. (If you get "Permission denied", run
    `chmod +x play-duskbloods.sh` once.)
-4. In the window, pick the **game folder** (the one containing `base/exefs/main`) and the
+4. In the window, pick the **game** (a `.nup` file, or the folder containing `base/exefs/main`) and the
    **emulator** (it looks in the launcher folder, `~/Applications`, `~/.local/bin`, `~/Downloads`
    and on your `PATH`; use Browse for anything else), then press **Start game**.
 5. Put your own `prod.keys` and `title.keys` in the emulator's `keys` folder. The launcher shows the

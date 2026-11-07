@@ -14,6 +14,7 @@ import re
 import runpy
 import shutil
 import socket
+import struct
 import subprocess
 import sys
 import threading
@@ -67,10 +68,64 @@ def is_game(main_file):
         return False
 
 
+def nup_files(path):
+    """The file records of a .nup package (NX Package: the base game, updates and add-ons in one
+    file, opened by Eglantine v30+ and Lichii) as {name: (size, offset, stored size, codec, sha256)}.
+    Only the table of contents is read; each record carries the sha256 of the file's contents."""
+    try:
+        with open(path, 'rb') as f:
+            head = f.read(0x80)
+            if len(head) < 0x80 or head[:4] != b'NUP\x01':
+                return None
+            toc_offset, toc_size = struct.unpack_from('<QQ', head, 8)
+            if toc_size > 256 * 1024 * 1024:
+                return None
+            f.seek(toc_offset)
+            toc = f.read(toc_size)
+        magic, packages, dirs, count, pool, _ = struct.unpack_from('<IIQQQQ', toc, 0)
+        if magic != 0x01434F54:
+            return None
+        at = 0x30 + packages * 0x40 + dirs * 0x18
+        files = {}
+        for i in range(count):
+            record = at + i * 0x50
+            name_at, name_length, size, offset, stored = struct.unpack_from('<IIQQQ', toc, record)
+            name = toc[pool + name_at:pool + name_at + name_length].decode('utf-8', 'replace')
+            files.setdefault(name, []).append((size, offset, stored, toc[record + 0x40],
+                                               toc[record + 0x20:record + 0x40].hex()))
+        return files
+    except (OSError, struct.error, ValueError):
+        return None
+
+
+def is_nup_game(path):
+    files = nup_files(path) if str(path).lower().endswith('.nup') else None
+    return bool(files) and any(entry[4] == GAME_SHA for entry in files.get('main', []))
+
+
+def nup_extract(path, name):
+    """The bytes of an uncompressed file in a .nup (checked against its sha256), else None."""
+    for size, offset, stored, codec, digest in (nup_files(path) or {}).get(name, []):
+        if codec != 0 or size != stored or size > 64 * 1024 * 1024:
+            continue
+        try:
+            with open(path, 'rb') as f:
+                f.seek(offset)
+                data = f.read(size)
+        except OSError:
+            continue
+        if hashlib.sha256(data).hexdigest() == digest:
+            return data
+    return None
+
+
 def game_main_from(path):
+    """The game to boot: the exefs `main` of an unpacked game folder, or a .nup package."""
     if not path:
         return None
     path = Path(path)
+    if path.suffix.lower() == '.nup':
+        return path if path.is_file() and is_nup_game(path) else None
     for candidate in (path, path / 'base/exefs/main', path / 'exefs/main',
                       path / GAME_FOLDER / 'base/exefs/main'):
         if is_game(candidate):
@@ -82,6 +137,11 @@ def default_game_folders():
     folders = [Path(os.environ['DUSK_GAME'])] if os.environ.get('DUSK_GAME') else []
     for parent in (HERE, *HERE.parents[:3]):
         folders.append(parent / GAME_FOLDER)
+    for parent in (HERE, HERE.parent):  # .nup packages next to the launcher
+        try:
+            folders += sorted(p for p in parent.iterdir() if p.suffix.lower() == '.nup')
+        except OSError:
+            pass
     return folders
 
 
@@ -357,9 +417,14 @@ class Session:
                 nand.mkdir(parents=True)
             cache = nand / 'system/save/bcat/0400D1D02399A000/Regulation'
             cache.mkdir(parents=True, exist_ok=True)
-            regulation = self.game_main.parents[1] / 'romfs/regulation_nt.bin'
-            if regulation.exists():
-                shutil.copyfile(regulation, cache / 'regulation_nt_1_0.bin')
+            if self.game_main.suffix.lower() == '.nup':
+                data = nup_extract(self.game_main, 'regulation_nt.bin')
+                if data:
+                    (cache / 'regulation_nt_1_0.bin').write_bytes(data)
+            else:
+                regulation = self.game_main.parents[1] / 'romfs/regulation_nt.bin'
+                if regulation.exists():
+                    shutil.copyfile(regulation, cache / 'regulation_nt_1_0.bin')
         if not save.exists():
             if seed and (seed / 'save').exists():
                 shutil.copytree(seed / 'save', save)
@@ -713,12 +778,22 @@ def run_gui():
     entry(game_frame, game_var).pack(side='left', fill='x', expand=True, ipady=4)
 
     def browse_game():
+        chosen = filedialog.askopenfilename(
+            title='Select the game: a .nup package, or the main file in base/exefs',
+            filetypes=[('Game (.nup or main)', '*.nup *.NUP main'), ('NUP package', '*.nup *.NUP'),
+                       ('All files', '*')])
+        if chosen:
+            game_var.set(chosen)
+            refresh()
+
+    def browse_game_folder():
         chosen = filedialog.askdirectory(title='Select the THE DUSKBLOODS NETWORK TEST VER folder')
         if chosen:
             game_var.set(chosen)
             refresh()
 
     button(game_frame, 'Browse', browse_game).pack(side='left', padx=(8, 0))
+    button(game_frame, 'Folder', browse_game_folder).pack(side='left', padx=(6, 0))
     game_status = note(body, '', size=9, wrap=640)
     game_status.pack(fill='x', padx=(16, 0), pady=(2, 0))
 
@@ -944,9 +1019,13 @@ def run_gui():
 
     def refresh(*_):
         main = game_main_from(game_var.get())
-        game_status.configure(text='The Duskbloods network test found' if main else
-                              'Not found: choose the folder that holds base/exefs/main',
-                              fg=GOOD if main else ERR)
+        if main and main.suffix.lower() == '.nup':
+            game_status.configure(text='The Duskbloods network test found (.nup package: needs an emulator '
+                                       'that opens .nup files, such as Eglantine v30+ or Lichii)', fg=GOOD)
+        else:
+            game_status.configure(text='The Duskbloods network test found' if main else
+                                  'Not found: Browse for the game\'s .nup file, or choose its Folder '
+                                  '(the one that holds base/exefs/main)', fg=GOOD if main else ERR)
         exe = selected_emulator()
         if exe:
             data = data_dir_for(exe)
