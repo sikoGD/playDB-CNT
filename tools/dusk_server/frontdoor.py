@@ -1,5 +1,5 @@
 """Loopback diagnostic TLS router; no production endpoints are contacted."""
-import argparse, datetime, json, os, select, socket, ssl, struct, threading, time
+import argparse, datetime, hashlib, json, os, select, socket, ssl, struct, threading, time
 from pathlib import Path
 import frontend_api
 from cryptography import x509
@@ -49,7 +49,7 @@ def client_hello(data):
     except (IndexError,ValueError,struct.error,UnicodeError): return None,True
 
 def proxy(conn):
-    with socket.create_connection(('127.0.0.1',args.upstream),timeout=5) as upstream:
+    with socket.create_connection((args.upstream_host,args.upstream),timeout=5) as upstream:
         conn.settimeout(None); upstream.settimeout(None)
         while True:
             ready,_,_=select.select([conn,upstream],[],[],30)
@@ -59,7 +59,7 @@ def proxy(conn):
                 if not data: return
                 (upstream if sock is conn else conn).sendall(data)
 
-def fs_request(conn,context,host):
+def fs_request(conn,context,host,peer='?',local='?'):
     try:
         with context.wrap_socket(conn,server_side=True) as tls:
             log('tls_ok',host=host,alpn=tls.selected_alpn_protocol(),version=tls.version())
@@ -75,6 +75,7 @@ def fs_request(conn,context,host):
                     if len(body)<size: break
                     buf=body[size:]
                     # Avoid logging tokens, headers or message bodies.
+                    ctx={'ip':peer,'local':local,'cookie':next((v.strip() for k,v in headers.items() if k.lower()=='cookie'),'')}
                     def shape(value):
                         if isinstance(value, dict): return {str(k): shape(v) for k,v in value.items()}
                         if isinstance(value, list): return [shape(v) for v in value[:3]]
@@ -92,8 +93,8 @@ def fs_request(conn,context,host):
                     if rtype:
                         # Values are logged only for request types that carry no credentials.
                         val=parsed.get('value') if rtype!='RequestCreateSessionParams' else None
-                        log('frontend_type',type=rtype,target=target,value=json.dumps(val)[:400] if val is not None else None)
-                    api=frontend_api.reply(rtype,parsed.get('value')) if rtype and os.environ.get('DUSK_FRONTEND')=='1' else None
+                        log('frontend_type',type=rtype,target=target,peer=peer,value=json.dumps(val)[:(4000 if frontend_api.ONLINE else 400)] if val is not None else None)
+                    api=frontend_api.reply(rtype,parsed.get('value'),ctx) if rtype and os.environ.get('DUSK_FRONTEND')=='1' else None
                     if not api and os.environ.get('DUSK_FRONTEND')=='1' and host.startswith('phx-ping'):
                         api=(b'{}',[])
                     if api and target!='/redirect':
@@ -131,18 +132,49 @@ def handle(conn,context):
             log('non_tls_connection',length=len(data),prefix_hex=data[:8].hex())
             return
         if sni and (sni=='fromsoftware-game.net' or sni.endswith('.fromsoftware-game.net')):
-            fs_request(conn,context,sni)
+            fs_request(conn,context,sni,conn.getpeername()[0],conn.getsockname()[0])
         else: proxy(conn)
     except (OSError,ssl.SSLError) as exc: log('connection_error',error=str(exc))
     finally: conn.close()
 
+def room_api(bind,port,name):
+    """Plain HTTP for online play: /hello, /ca.der (the certificate players trust) and /register
+    (a player's room, a hash of the room password made by the launcher)."""
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+    class Handler(BaseHTTPRequestHandler):
+        def log_message(self,*a): pass
+        def send(self,code,body,kind='application/json'):
+            self.send_response(code); self.send_header('Content-Type',kind)
+            self.send_header('Content-Length',str(len(body))); self.end_headers(); self.wfile.write(body)
+        def do_GET(self):
+            if self.path=='/hello':
+                self.send(200,json.dumps(dict(name=name,service='duskbloods-online',**frontend_api.stats())).encode())
+            elif self.path=='/ca.der' and (args.ca_dir/'ca.der').exists():
+                self.send(200,(args.ca_dir/'ca.der').read_bytes(),'application/x-x509-ca-cert')
+            else: self.send(404,b'{}')
+        def do_POST(self):
+            try:
+                size=max(0,min(int(self.headers.get('Content-Length','0')),4096))
+                room=str(json.loads(self.rfile.read(size) if size else b'{}').get('room',''))
+            except (ValueError,UnicodeError,AttributeError): room=''
+            if self.path=='/register' and len(room)>=16 and all(c in '0123456789abcdef' for c in room):
+                frontend_api.register_room(self.client_address[0],room); self.send(200,b'{"ok":true}')
+            else: self.send(400,b'{"ok":false}')
+    server=ThreadingHTTPServer((bind,port),Handler); server.daemon_threads=True
+    threading.Thread(target=server.serve_forever,daemon=True).start()
+    log('room_api',bind=bind,port=port)
+
 if __name__=='__main__':
     ap=argparse.ArgumentParser(); ap.add_argument('--port',type=int,default=18443); ap.add_argument('--upstream',type=int,default=18444)
+    ap.add_argument('--bind',default='127.0.0.1'); ap.add_argument('--upstream-host',default='127.0.0.1')
+    ap.add_argument('--room-port',type=int,default=0); ap.add_argument('--room-name',default='Duskbloods room')
     ap.add_argument('--ca-dir',type=Path,required=True); ap.add_argument('--cert-dir',type=Path,required=True); ap.add_argument('--log',required=True)
     args=ap.parse_args(); key,chain=certificate(args.ca_dir,args.cert_dir)
+    frontend_api.LOG=log
     context=ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER); context.load_cert_chain(chain,key); context.set_alpn_protocols(['http/1.1'])
     with socket.socket() as server:
-        server.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1); server.bind(('127.0.0.1',args.port)); server.listen(32)
-        log('listening',port=args.port,upstream=args.upstream)
+        os.name=='nt' or server.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1); server.bind((args.bind,args.port)); server.listen(32)
+        log('listening',port=args.port,upstream=args.upstream,bind=args.bind)
+        if args.room_port: room_api(args.bind,args.room_port,args.room_name)
         while True:
             conn,_=server.accept(); threading.Thread(target=handle,args=(conn,context),daemon=True).start()

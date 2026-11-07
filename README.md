@@ -1,8 +1,9 @@
 # playDB-CNT - Play Duskbloods (Network Test) launcher
 
 A small launcher (Windows and Linux) for running **The Duskbloods Network Test** on Eglantine-based Switch 2
-emulators (Eglantine, Lichii, Eden-style builds) with the online features served by local,
-loopback-only stand-in servers.
+emulators (Eglantine, Lichii, Eden-style builds) with the online features served by local
+stand-in servers, either for yourself (offline, loopback only) or for a room of friends
+(**online rooms, new in 1.1.0**: see [ONLINE.md](ONLINE.md)).
 
 It gives you a window styled after the game's menus where you pick:
 
@@ -11,16 +12,29 @@ It gives you a window styled after the game's menus where you pick:
   `lichii`, `eden`, `yuzu` or an AppImage), found automatically next to the launcher, in sibling
   build folders and in a `Lichii` folder, or chosen with Browse.
 
-Press **PLAY** and it starts the stand-in servers, launches the emulator with the game, and stops
-the servers when the game closes. Logs are written next to the emulator's data (`Open logs`).
+Press **Start game** and it starts the stand-in servers, launches the emulator with the game, and
+stops the servers when the game closes. Logs are written next to the emulator's data (`Open logs`).
+
+## Online play (experimental)
+
+The **Online** tab has three modes: **Just me** (offline, as before), **Host a room** and
+**Join a room**. Everyone who types the **same room password** is matched together: one friend
+hosts, the others type the host's address and join.
+
+The in-game match connects the emulators directly, and the server has no relay for that. Players
+need the same home network, a VPN such as **ZeroTier** (recommended), **Tailscale** or **Radmin VPN**,
+or router port forwards. The Online tab lists the ports.
+
+**Step-by-step guide, VPN setup and troubleshooting: [ONLINE.md](ONLINE.md).**
 
 ## What is in here
 
 | Path | What |
 |---|---|
 | `play_duskbloods.py` | the launcher (Tk window, game/emulator discovery, process management) |
-| `tools/npln_server/` | local stand-in for the online login/session service (listens on 127.0.0.1) |
-| `tools/dusk_server/` | local "front door" stand-in for the game's own web API (127.0.0.1) |
+| `tools/npln_server/` | local stand-in for the online login/session service (127.0.0.1; also the host's network addresses when hosting a room) |
+| `tools/dusk_server/` | "front door" stand-in for the game's own web API, plus the room matchmaking used by online rooms |
+| `ONLINE.md` | how to play online with friends (VPN recommendations, ports, troubleshooting) |
 | `assets/` | window art and the icon, taken from the game's title screen |
 | `build_exe.py` | builds the single-file `Play Duskbloods.exe` with PyInstaller |
 | `linux/` | `play-duskbloods.sh` (starts the launcher on Linux) and `README-LINUX.md` |
@@ -32,7 +46,7 @@ the servers when the game closes. Logs are written next to the emulator's data (
 2. Run it, pick the game folder and the emulator.
 3. Have your own `prod.keys` and `title.keys` in the emulator's `keys` folder (portable builds:
    `user/keys`; Lichii/Eden: `%APPDATA%\eden\keys`). The launcher tells you if they are missing.
-4. Press **PLAY**.
+4. Press **Start game**. To play with friends, see [ONLINE.md](ONLINE.md).
 
 On the first run the launcher creates private test certificates for your PC (in the emulator's
 data folder) and seeds an empty test NAND/save. Packaged builds that already have a
@@ -70,7 +84,7 @@ to Linux, follow these steps in order; commands go in a terminal.
    `chmod +x play-duskbloods.sh` once.)
 4. In the window, pick the **game folder** (the one containing `base/exefs/main`) and the
    **emulator** (it looks in the launcher folder, `~/Applications`, `~/.local/bin`, `~/Downloads`
-   and on your `PATH`; use Browse for anything else), then press **PLAY**.
+   and on your `PATH`; use Browse for anything else), then press **Start game**.
 5. Put your own `prod.keys` and `title.keys` in the emulator's `keys` folder. The launcher shows the
    exact path if they are missing.
 
@@ -105,11 +119,15 @@ run `./linux/play-duskbloods.sh` from a checkout of this repository, or use the 
 
 ## Privacy and safety
 
-* The servers bind to **127.0.0.1 only**; nothing is sent to any real service. The emulator is
-  started in its loopback-only online mode.
+* Offline (**Just me**), the servers bind to **127.0.0.1 only**; nothing is sent to any real
+  service, and the emulator is started in its loopback-only online mode.
+* Online rooms talk only to the host's PC, never to any real service. The room password is never
+  sent; only a hash of it is. Hosting opens the ports listed in [ONLINE.md](ONLINE.md) while the
+  game runs, so only play with people you trust.
 * No keys, game files, saves or certificates are in this repository or the exe. Certificates are
   generated on your own PC the first time you play.
-* The launcher stores only your two selected paths in `launcher_settings.json` beside the exe.
+* The launcher stores your selected paths and Online tab choices (mode, room password, host
+  address) in `launcher_settings.json` beside the exe.
 * Before each launch it resets the emulator's saved network adapter to automatic (an adapter name
   copied from another PC, e.g. a VPN, makes the game report "no internet connection").
 

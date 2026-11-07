@@ -1,7 +1,8 @@
 # Play Duskbloods launcher - Linux
 
-The launcher starts the loopback-only stand-in servers (127.0.0.1, nothing is sent anywhere) and
-then your emulator with the game. **It does not include an emulator**: you need a Linux build of
+The launcher starts the stand-in servers (offline: 127.0.0.1 only, nothing is sent anywhere) and
+then your emulator with the game. To play with friends (Online tab, room passwords), read
+`ONLINE.md` in this folder. **It does not include an emulator**: you need a Linux build of
 Eglantine (or Lichii / Eden / yuzu) that has the Duskbloods support.
 
 ## Requirements
