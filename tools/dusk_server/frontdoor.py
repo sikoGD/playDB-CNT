@@ -155,10 +155,11 @@ def room_api(bind,port,name):
         def do_POST(self):
             try:
                 size=max(0,min(int(self.headers.get('Content-Length','0')),4096))
-                room=str(json.loads(self.rfile.read(size) if size else b'{}').get('room',''))
-            except (ValueError,UnicodeError,AttributeError): room=''
+                body=json.loads(self.rfile.read(size) if size else b'{}')
+                room=str(body.get('room','')); bots=body.get('bots') is True
+            except (ValueError,UnicodeError,AttributeError): room=''; bots=False
             if self.path=='/register' and len(room)>=16 and all(c in '0123456789abcdef' for c in room):
-                frontend_api.register_room(self.client_address[0],room); self.send(200,b'{"ok":true}')
+                frontend_api.register_room(self.client_address[0],room,bots); self.send(200,b'{"ok":true}')
             else: self.send(400,b'{"ok":false}')
     server=ThreadingHTTPServer((bind,port),Handler); server.daemon_threads=True
     threading.Thread(target=server.serve_forever,daemon=True).start()

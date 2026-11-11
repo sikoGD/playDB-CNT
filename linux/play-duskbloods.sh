@@ -1,6 +1,6 @@
 #!/usr/bin/env sh
 # Play Duskbloods launcher for Linux. First run sets up a private Python environment
-# (grpcio + cryptography, ~30 MB) under ~/.local/share/duskbloods-launcher, then starts the GUI.
+# (grpcio + cryptography + zstandard, ~35 MB) under ~/.local/share/duskbloods-launcher, then starts the GUI.
 set -e
 cd "$(dirname "$(readlink -f "$0")")"
 [ -f play_duskbloods.py ] || cd ..   # running from a repository checkout (script is in linux/)
@@ -20,8 +20,8 @@ if [ ! -x "$VENV/bin/python" ]; then
     echo "Setting up the launcher (first run only)..."
     "$PY" -m venv "$VENV" || { echo "python3-venv is missing: sudo apt install python3-venv" >&2; exit 1; }
 fi
-if ! "$VENV/bin/python" -c 'import grpc, cryptography' >/dev/null 2>&1; then
-    "$VENV/bin/python" -m pip install --quiet --disable-pip-version-check grpcio cryptography
+if ! "$VENV/bin/python" -c 'import grpc, cryptography, zstandard' >/dev/null 2>&1; then
+    "$VENV/bin/python" -m pip install --quiet --disable-pip-version-check grpcio cryptography zstandard
 fi
 
 exec "$VENV/bin/python" play_duskbloods.py "$@"

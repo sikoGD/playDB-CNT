@@ -1,0 +1,85 @@
+# Builds the macOS and Linux packages (launcher source + a prebuilt ooz) and attaches them to the
+# release. Runs when a release is published, or by hand for an existing tag.
+name: packages
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to attach the packages to (e.g. v1.2.0)
+        required: true
+
+permissions:
+  contents: write
+
+env:
+  TAG: ${{ github.event.release.tag_name || inputs.tag }}
+
+jobs:
+  mac:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+      - name: "Build ooz (universal: arm64 + x86_64)"
+        working-directory: tools/ooz/source
+        run: |
+          c++ -O2 -w -arch arm64 kraken.cpp bitknit.cpp lzna.cpp -o ooz-arm64
+          c++ -O2 -w -arch x86_64 -msse4.1 kraken.cpp bitknit.cpp lzna.cpp -o ooz-x86_64
+          lipo -create ooz-arm64 ooz-x86_64 -output ../ooz
+          codesign --force -s - ../ooz
+          lipo -info ../ooz
+      - name: Test ooz on a Kraken sample (both slices)
+        run: |
+          git clone --quiet https://github.com/powzix/ooz.git /tmp/oozref
+          git -C /tmp/oozref checkout --quiet 05038060aa68f9187ae9923b2388ca8db40e58d1
+          python3 .github/workflows/ooz_check.py tools/ooz/ooz /tmp/oozref/testdata/dickens.kraken
+          python3 .github/workflows/ooz_check.py "arch -x86_64 tools/ooz/ooz" /tmp/oozref/testdata/dickens.kraken
+      - name: Check the launcher modules
+        run: python3 -c "import ast; [ast.parse(open(f).read()) for f in ('play_duskbloods.py', 'dusk_mods.py')]"
+      - name: Package
+        run: |
+          D=Play-Duskbloods-mac
+          mkdir -p "$D"
+          cp -R play_duskbloods.py dusk_mods.py tools assets ONLINE.md "$D/"
+          rm -rf "$D/tools/ooz/ooz.exe" "$D/tools/ooz/source/ooz-arm64" "$D/tools/ooz/source/ooz-x86_64"
+          cp "mac/Play Duskbloods.command" mac/README-MAC.md "$D/"
+          chmod +x "$D/Play Duskbloods.command" "$D/tools/ooz/ooz"
+          ditto -c -k --keepParent "$D" Play-Duskbloods-mac.zip
+      - name: Upload to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$TAG" Play-Duskbloods-mac.zip --clobber
+
+  linux:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+      - name: Build ooz (x86_64)
+        working-directory: tools/ooz/source
+        run: |
+          g++ -O2 -w -msse4.1 -static-libstdc++ -static-libgcc kraken.cpp bitknit.cpp lzna.cpp -o ../ooz
+          ../ooz || test $? -eq 2
+      - name: Test ooz on a Kraken sample
+        run: |
+          git clone --quiet https://github.com/powzix/ooz.git /tmp/oozref
+          git -C /tmp/oozref checkout --quiet 05038060aa68f9187ae9923b2388ca8db40e58d1
+          python3 .github/workflows/ooz_check.py tools/ooz/ooz /tmp/oozref/testdata/dickens.kraken
+      - name: Package
+        run: |
+          D=Play-Duskbloods-linux
+          mkdir -p "$D"
+          cp -R play_duskbloods.py dusk_mods.py tools assets ONLINE.md "$D/"
+          rm -f "$D/tools/ooz/ooz.exe"
+          cp linux/play-duskbloods.sh linux/README-LINUX.md "$D/"
+          chmod +x "$D/play-duskbloods.sh" "$D/tools/ooz/ooz"
+          tar czf Play-Duskbloods-linux.tar.gz "$D"
+      - name: Upload to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$TAG" Play-Duskbloods-linux.tar.gz --clobber

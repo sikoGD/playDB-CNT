@@ -18,7 +18,7 @@ Eglantine (or Lichii / Eden / yuzu) that has the Duskbloods support.
     ./play-duskbloods.sh
 
 The first run creates a private Python environment in `~/.local/share/duskbloods-launcher/venv`
-and installs `grpcio` and `cryptography`.
+and installs `grpcio`, `cryptography` and `zstandard`.
 
 The launcher looks for emulators next to itself, in `~/Applications`, `~/.local/bin`,
 `~/Downloads` and on your `PATH`; use **Browse** for anything else. The game folder is the

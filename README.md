@@ -1,9 +1,10 @@
 # playDB-CNT - Play Duskbloods (Network Test) launcher
 
-A small launcher (Windows and Linux) for running **The Duskbloods Network Test** on Eglantine-based Switch 2
+A small launcher (Windows, Linux and macOS) for running **The Duskbloods Network Test** on Eglantine-based Switch 2
 emulators (Eglantine, Lichii, Eden-style builds) with the online features served by local
 stand-in servers, either for yourself (offline, loopback only) or for a room of friends
-(**online rooms, new in 1.1.0**: see [ONLINE.md](ONLINE.md)).
+(online rooms: see [ONLINE.md](ONLINE.md)). New in 1.2.0: **Bot Match**, a full match against
+7 CPU players (see below).
 
 It gives you a window styled after the game's menus where you pick:
 
@@ -16,6 +17,15 @@ It gives you a window styled after the game's menus where you pick:
 
 Press **Start game** and it starts the stand-in servers, launches the emulator with the game, and
 stops the servers when the game closes. Logs are written next to the emulator's data (`Open logs`).
+
+## Bot Match (new in 1.2.0)
+
+The launcher adds **Bot Match** to the game's **Battle Remembrance > Tutorials** list: a complete
+Dusk Battle on the full map, you against 7 CPU players, from the first phase to the final battle.
+It's the game's own hidden full-map mission, switched on by the launcher. At each start it adds the
+mission to the game's regulation and its name and description to the game's menu text (all
+languages), both built from your own game files. The text goes into the emulator's mod folder as
+`Bot Match (playDB-CNT)`. Untick **Bot Match** in the Setup tab to use the game's own files.
 
 ## Online play (experimental)
 
@@ -39,7 +49,10 @@ or router port forwards. The Online tab lists the ports.
 | `ONLINE.md` | how to play online with friends (VPN recommendations, ports, troubleshooting) |
 | `assets/` | window art and the icon, taken from the game's title screen |
 | `build_exe.py` | builds the single-file `Play Duskbloods.exe` with PyInstaller |
+| `dusk_mods.py` | Bot Match: patches the regulation and adds the menu text |
+| `tools/ooz/` | the open-source Kraken decompressor ooz (GPL-3.0, with source), used to read the game's menu text |
 | `linux/` | `play-duskbloods.sh` (starts the launcher on Linux) and `README-LINUX.md` |
+| `mac/` | `Play Duskbloods.command` (starts the launcher on macOS) and `README-MAC.md` |
 
 ## Using it (Windows)
 
@@ -81,8 +94,8 @@ to Linux, follow these steps in order; commands go in a terminal.
    ```
 
    The first start needs internet for a minute: it creates a private Python environment in
-   `~/.local/share/duskbloods-launcher/venv` and installs two small libraries (`grpcio`,
-   `cryptography`). Later starts are instant. (If you get "Permission denied", run
+   `~/.local/share/duskbloods-launcher/venv` and installs three small libraries (`grpcio`,
+   `cryptography`, `zstandard`). Later starts are instant. (If you get "Permission denied", run
    `chmod +x play-duskbloods.sh` once.)
 4. In the window, pick the **game** (a `.nup` file, or the folder containing `base/exefs/main`) and the
    **emulator** (it looks in the launcher folder, `~/Applications`, `~/.local/bin`, `~/Downloads`
@@ -109,10 +122,25 @@ The Linux package is small (about 330 KB) because it only holds the launcher's s
 images; it uses your system Python. The Windows exe is about 18 MB because it carries its own
 Python.
 
+## Using it (macOS)
+
+The launcher runs on macOS (Apple Silicon and Intel). **It does not include an emulator**: you need
+a macOS build of an emulator with Duskbloods (Switch 2) support.
+
+1. Install Python 3 from <https://www.python.org/downloads/macos/> (it includes Tk).
+2. Download `Play-Duskbloods-mac.zip` from the
+   [Releases page](https://github.com/sikoGD/playDB-CNT/releases) and unzip it.
+3. Double-click **Play Duskbloods.command**. The first time, macOS may say it is from an
+   unidentified developer: right-click it, choose **Open**, then **Open** again.
+
+The first start creates a private Python environment and installs `grpcio`, `cryptography` and
+`zstandard`. Emulator apps (`Eden.app`, `Lichii.app`, ...) are found in `/Applications`,
+`~/Applications`, `~/Downloads` and next to the launcher. Details: `mac/README-MAC.md`.
+
 ## Building the exe
 
 ```
-pip install pyinstaller cryptography grpcio
+pip install pyinstaller cryptography grpcio zstandard
 python build_exe.py
 ```
 

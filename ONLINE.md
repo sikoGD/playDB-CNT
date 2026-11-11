@@ -15,9 +15,10 @@ types the **same room password** is matched together. One player **hosts** the r
 4. [Other options: Tailscale, Radmin VPN, same home network, port forwarding](#other-options)
 5. [Hosting a room](#hosting-a-room)
 6. [Joining a room](#joining-a-room)
-7. [Troubleshooting](#troubleshooting)
-8. [Privacy](#privacy)
-9. [Reporting a problem](#reporting-a-problem)
+7. [Bot Match: a full match against 7 CPU players](#bot-match-a-full-match-against-7-cpu-players)
+8. [Troubleshooting](#troubleshooting)
+9. [Privacy](#privacy)
+10. [Reporting a problem](#reporting-a-problem)
 
 ## How it works
 
@@ -27,11 +28,15 @@ types the **same room password** is matched together. One player **hosts** the r
 * When players start matchmaking in the game, the host's server groups everyone who used the same
   room password into one match. The game then **connects the emulators directly to each other**
   (peer-to-peer).
+* A match has **2 to 8 players**. As soon as everyone signed in to the room is searching, the match
+  starts. If someone in the room isn't searching, the others wait up to 20 seconds for them, then
+  start without them.
 
 Everyone needs:
 
-* the latest `Play Duskbloods.exe` from the [Releases](https://github.com/sikoGD/playDB-CNT/releases)
-  page (everyone on the same version),
+* the latest launcher from the [Releases](https://github.com/sikoGD/playDB-CNT/releases) page
+  (`Play Duskbloods.exe` on Windows, the Linux or macOS package elsewhere), everyone on the same
+  version,
 * their own copy of the game, emulator and keys (set up in the **Setup** tab, as for offline play),
 * a way to reach the host's PC. See the next section.
 
@@ -43,8 +48,8 @@ Players need one of these:
 | Option | Good for | Difficulty |
 |---|---|---|
 | **Same home network** (same router / Wi-Fi) | friends in the same house | nothing to set up |
-| **[ZeroTier](https://www.zerotier.com/download/)** (recommended) | friends anywhere, Windows and Linux | easy, about 5 minutes |
-| **[Tailscale](https://tailscale.com/download)** | friends anywhere, Windows and Linux | easy |
+| **[ZeroTier](https://www.zerotier.com/download/)** (recommended) | friends anywhere, Windows, macOS and Linux | easy, about 5 minutes |
+| **[Tailscale](https://tailscale.com/download)** | friends anywhere, Windows, macOS and Linux | easy |
 | **[Radmin VPN](https://www.radmin-vpn.com/)** | friends anywhere, Windows only, no account | very easy |
 | **Router port forwarding** | no VPN software at all | harder; needs router access |
 
@@ -150,6 +155,23 @@ Keep the launcher open while you play. Closing the game stops the room for every
 6. Wait until the host has pressed **Start game**, then press **Start game** yourself.
 7. Allow the emulator in Windows Firewall if asked, then start online matchmaking in the game.
 
+## Bot Match: a full match against 7 CPU players
+
+Want a real match with nobody else around? The launcher adds **Bot Match** to the game's
+**Battle Remembrance > Tutorials** list. It is a complete Dusk Battle on the full map, you against 7
+CPU players, from the first phase to the final battle. It's the game's own hidden full-map mission,
+switched on by the launcher.
+
+1. In the launcher's **Setup** tab, leave **Bot Match** ticked (it is on by default).
+2. Press **Start game**. Any Online mode works; **Just me** keeps everything on your PC.
+3. In the game, open the menu, go to **Battle Remembrance** (the third tab) and choose
+   **Bot Match** at the end of the **Tutorials** list.
+
+How it works: at each start the launcher adds the mission to the game's regulation (the game's
+balance data) and its name and description to the game's menu text, in every language. Both are
+built from your own game files. The text goes into the emulator's mod folder as
+**Bot Match (playDB-CNT)**. Untick **Bot Match** to go back to the game's own files.
+
 ## Troubleshooting
 
 **"Could not reach the room at ..."**
@@ -164,7 +186,9 @@ Keep the launcher open while you play. Closing the game stops the room for every
 
 **Matchmaking never finds anyone.**
 * Everyone must use the **exact same room password**. A different password is a different room.
-* Everyone must start matchmaking within roughly the same minute.
+* Everyone should start matchmaking within about 20 seconds of each other. The game retries on its
+  own, so keep searching. If one friend is signed in but not searching, the others are matched
+  without them after 20 seconds.
 * Everyone must use the same launcher version.
 
 **Matched, but the game says the connection failed or someone drops out.**

@@ -22,6 +22,8 @@ import time
 import urllib.request
 from pathlib import Path
 
+import dusk_mods
+
 
 def _tolerant(method):
     """Unreadable folders (e.g. R:\\WpSystem -> WinError 1337) count as 'not there' instead of
@@ -37,13 +39,14 @@ def _tolerant(method):
 for _name in ('exists', 'is_file', 'is_dir'):
     setattr(Path, _name, _tolerant(getattr(Path, _name)))
 
-VERSION = '1.1.0'
+VERSION = '1.2.0'
 PORT = 18443
 ROOM_OFFSET = 2          # online play: the room service listens two ports above the game port
 WEB_PORT = 18090
 GAME_SHA = '2ef7b7bcd78905f30069d03aa44e1e124d83bd83bdcc1766bd3d01ea2ad137a3'
 GAME_FOLDER = 'THE DUSKBLOODS NETWORK TEST VER'
 IS_WINDOWS = os.name == 'nt'
+IS_MAC = sys.platform == 'darwin'
 EMULATOR_KINDS = ('eglantine', 'lichii', 'eden', 'yuzu')
 EMULATOR_NAMES = tuple(f'{kind}.exe' for kind in EMULATOR_KINDS) if IS_WINDOWS else EMULATOR_KINDS
 FROZEN = getattr(sys, 'frozen', False)
@@ -145,17 +148,33 @@ def default_game_folders():
     return folders
 
 
+def app_bundle_exe(app):
+    """macOS: the emulator program inside an .app bundle (Eden.app/Contents/MacOS/eden)."""
+    try:
+        for item in sorted((Path(app) / 'Contents/MacOS').iterdir()):
+            if item.name.lower().startswith(EMULATOR_KINDS) and item.is_file():
+                return item
+    except OSError:
+        pass
+    return None
+
+
 def emulator_exe_in(folder):
     folder = Path(folder)
+    if IS_MAC and folder.suffix.lower() == '.app':
+        return app_bundle_exe(folder)
     for name in EMULATOR_NAMES:
         if (folder / name).is_file():
             return folder / name
-    if not IS_WINDOWS:  # AppImages are named like Eglantine-x86_64.AppImage
+    if not IS_WINDOWS:  # AppImages are named like Eglantine-x86_64.AppImage; macOS apps like Eden.app
         try:
             for item in sorted(folder.iterdir()):
-                if item.name.lower().endswith('.appimage') and \
-                        item.name.lower().startswith(EMULATOR_KINDS) and item.is_file():
+                lower = item.name.lower()
+                if lower.endswith('.appimage') and lower.startswith(EMULATOR_KINDS) and item.is_file():
                     return item
+                if IS_MAC and lower.endswith('.app') and lower.startswith(EMULATOR_KINDS):
+                    if (exe := app_bundle_exe(item)):
+                        return exe
         except OSError:
             pass
     return None
@@ -169,6 +188,8 @@ def default_emulators():
     for parent in HERE.parents[:3]:
         roots += [parent / 'DB-Eglantine Windows Builds', parent / 'build-msvc/bin', parent / 'Lichii']
     roots.append(Path.home() / 'Downloads/Lichii')
+    if IS_MAC:
+        roots.append(Path('/Applications'))
     if not IS_WINDOWS:
         roots += [Path.home() / 'Applications', Path.home() / '.local/bin', Path.home() / 'Downloads']
         found += [Path(path) for path in (shutil.which(name) for name in EMULATOR_KINDS) if path]
@@ -195,6 +216,8 @@ def emulator_label(exe):
     name = exe.name.lower()
     kind = next((k.capitalize() if k != 'yuzu' else k for k in EMULATOR_KINDS if name.startswith(k)),
                 exe.stem)
+    if exe.parent.name == 'MacOS' and exe.parents[1].name == 'Contents':  # macOS: Eden.app
+        return f'{kind}  -  {exe.parents[2].name}'
     return f'{kind}  -  {exe.parent.name}'
 
 
@@ -205,6 +228,8 @@ def data_dir_for(exe):
         return portable
     if IS_WINDOWS:
         appdata = Path(os.environ.get('APPDATA', Path.home() / 'AppData/Roaming'))
+    elif IS_MAC:  # macOS: ~/Library/Application Support/<emulator>
+        appdata = Path.home() / 'Library/Application Support'
     else:  # Linux: ~/.local/share/<emulator>
         appdata = Path(os.environ.get('XDG_DATA_HOME') or Path.home() / '.local/share')
     for name in ('eden', 'lichii', 'eglantine', 'yuzu'):
@@ -377,7 +402,8 @@ def set_key(text, key, value):
 class Session:
     """One play session: servers + emulator. Messages go to `log`."""
 
-    def __init__(self, game_main, emulator, log, online=None):
+    def __init__(self, game_main, emulator, log, online=None, bot_match=True):
+        self.bot_match = bot_match
         self.online = online or {'mode': 'offline'}
         self.mode = self.online.get('mode', 'offline')
         self.servers = False
@@ -415,22 +441,62 @@ class Session:
                 shutil.copytree(seed / 'nand', nand)
             else:
                 nand.mkdir(parents=True)
-            cache = nand / 'system/save/bcat/0400D1D02399A000/Regulation'
-            cache.mkdir(parents=True, exist_ok=True)
-            if self.game_main.suffix.lower() == '.nup':
-                data = nup_extract(self.game_main, 'regulation_nt.bin')
-                if data:
-                    (cache / 'regulation_nt_1_0.bin').write_bytes(data)
-            else:
-                regulation = self.game_main.parents[1] / 'romfs/regulation_nt.bin'
-                if regulation.exists():
-                    shutil.copyfile(regulation, cache / 'regulation_nt_1_0.bin')
+        self.write_regulation(nand)
         if not save.exists():
             if seed and (seed / 'save').exists():
                 shutil.copytree(seed / 'save', save)
             else:
                 save.mkdir(parents=True)
         return nand, save
+
+    def write_regulation(self, nand):
+        """The game reads its regulation from the BCAT cache: the game's own copy, or (Bot Match on)
+        that copy with the full-map mission added to the Tutorials. Written at every start, so the
+        option takes effect at once."""
+        cache = nand / 'system/save/bcat/0400D1D02399A000/Regulation'
+        cache.mkdir(parents=True, exist_ok=True)
+        try:
+            data = dusk_mods.GameFiles(self.game_main).read('regulation_nt.bin')
+        except (OSError, ValueError, struct.error):
+            data = None
+        if not data:
+            return
+        if self.bot_match:
+            try:
+                data = dusk_mods.patch_regulation(data)
+            except Exception as error:  # an unknown regulation: play without Bot Match
+                self.log(f'Bot Match unavailable ({error}); starting with the game\'s own regulation.')
+                self.bot_match = False
+        (cache / 'regulation_nt_1_0.bin').write_bytes(data)
+
+    def load_directory(self):
+        """The emulator's mod folder (load_directory in qt-config.ini, else <data>/load)."""
+        config = config_file_for(self.data)
+        try:
+            text = config.read_text(encoding='utf-8')
+        except OSError:
+            text = ''
+        custom = re.search(r'(?m)^load_directory\\default=false$', text)
+        value = re.search(r'(?m)^load_directory=(.+)$', text)
+        if custom and value and value.group(1).strip():
+            return Path(value.group(1).strip())
+        return self.data / 'load'
+
+    def install_mods(self):
+        """Bot Match's name and description in every language (a LayeredFS mod), or none."""
+        load = self.load_directory()
+        if not self.bot_match:
+            dusk_mods.remove_text_mod(load)
+            return
+        ooz = TOOLS / 'ooz' / ('ooz.exe' if IS_WINDOWS else 'ooz')
+        if not ooz.exists():
+            self.log('Bot Match is in Battle Remembrance > Tutorials (its name is not shown on this system).')
+            return
+        try:
+            dusk_mods.install_text_mod(dusk_mods.GameFiles(self.game_main), load, ooz, self.log)
+            self.log('Bot Match is in Battle Remembrance > Tutorials: a full match against 7 CPU players.')
+        except Exception as error:
+            self.log(f'Bot Match text not added ({error}); the entry shows without a name.')
 
     def prepare_config(self, nand, save):
         config = config_file_for(self.data)
@@ -491,6 +557,8 @@ class Session:
         front_env = dict(os.environ, DUSK_REDIRECT_VALUE='nochange', DUSK_FRONTEND='1', PYTHONUNBUFFERED='1')
         front_args = ['--port', str(PORT), '--upstream', str(upstream_port), '--ca-dir', str(pki),
                       '--cert-dir', str(self.test / 'frontdoor_pki'), '--log', str(run / 'frontdoor.log')]
+        if self.mode == 'bots':  # practice: matchmaking on this PC, every match filled with bots
+            front_env.update(DUSK_ONLINE='1', DUSK_BOTS='1')
         if hosting:
             front_env.update(DUSK_ONLINE='1', DUSK_HOST_IP=stub_hosts[1] if len(stub_hosts) > 1 else '')
             front_args += ['--bind', '0.0.0.0', '--room-port', str(PORT + ROOM_OFFSET),
@@ -507,13 +575,16 @@ class Session:
             return False
         if hosting:
             try:
-                http_get(f'http://127.0.0.1:{PORT + ROOM_OFFSET}/register', {'room': room_id(self.online['password'])})
+                http_get(f'http://127.0.0.1:{PORT + ROOM_OFFSET}/register',
+                         {'room': room_id(self.online['password']), 'bots': bool(self.online.get('bots'))})
             except OSError as error:
                 self.log(f'The room service did not start ({error}); see {run}', error=True)
                 self.stop()
                 return False
             shown = ', '.join(a for a in local_addresses()) or 'this PC\'s address'
             self.log(f'Room open. Friends join with the address {shown} and the same password.')
+        if self.mode == 'bots':
+            self.log('Bots match: start matchmaking in the game; you are matched at once against bots.')
         return True
 
     def join_server(self, run):
@@ -545,6 +616,7 @@ class Session:
             return None
         nand, save = self.seed()
         self.prepare_config(nand, save)
+        self.install_mods()
         self.run_dir = self.test / 'runs' / time.strftime('%Y%m%d_%H%M%S')
         run = self.run_dir
         (run / 'server_data').mkdir(parents=True)
@@ -567,7 +639,7 @@ class Session:
                    EDEN_NX2_ONLINE_SERVER=server_address,
                    EDEN_NX2_ONLINE_CA=str(ca_file),
                    EDEN_NX2_CRASH_DUMP=str(run), EDEN_NX2_TRACE_TERMINATE='1')
-        if self.mode == 'offline':  # offline: nothing but this PC
+        if self.mode in ('offline', 'bots'):  # offline: nothing but this PC
             env.update(EDEN_NX2_LOOPBACK_ONLY='1')
         env.update({k: v for k, v in os.environ.items() if k.startswith('EDEN_NX2_') and k not in env})
         env.pop('SDL_AUDIODRIVER', None)
@@ -825,6 +897,8 @@ def run_gui():
                        else [('All files', '*')]))
         if chosen:
             exe = Path(chosen)
+            if IS_MAC and exe.suffix.lower() == '.app':  # an app bundle: use the program inside
+                exe = app_bundle_exe(exe) or exe
             if exe.resolve() not in [e.resolve() for e in emulators]:
                 emulators.insert(0, exe)
                 labels.insert(0, emulator_label(exe))
@@ -835,6 +909,12 @@ def run_gui():
     button(emu_frame, 'Browse', browse_emulator).pack(side='left', padx=(8, 0))
     emu_status = note(body, '', size=9, wrap=640)
     emu_status.pack(fill='x', padx=(16, 0), pady=(2, 6))
+
+    bot_match_var = tk.IntVar(value=0 if settings.get('bot_match') is False else 1)
+    tk.Checkbutton(body, text='Bot Match: a full Dusk Battle against 7 CPU players, added to '
+                              'Battle Remembrance > Tutorials', variable=bot_match_var, font=(SERIF, 10), fg=TEXT,
+                   bg=PAGE, selectcolor=ITEM, activebackground=PAGE, activeforeground=GOLD, highlightthickness=0,
+                   anchor='w', wraplength=640, justify='left').pack(fill='x', padx=(12, 0), pady=(0, 4))
 
     def selected_emulator():
         label = emu_var.get()
@@ -851,11 +931,13 @@ def run_gui():
     password_var = tk.StringVar(value=saved_online.get('password', ''))
     server_var = tk.StringVar(value=saved_online.get('server', ''))
     show_var = tk.IntVar(value=0)
+    bots_var = tk.IntVar(value=0)  # the room 'bots' flag: kept for the server, no longer offered
 
     MODES = {
         'offline': ('Just me', 'Offline test',
                     'Play on your own. The game only talks to the small servers the launcher runs on '
-                    'this PC; nothing leaves it.'),
+                    'this PC; nothing leaves it. For a full match against 7 CPU players, play Bot Match '
+                    'in Battle Remembrance > Tutorials.'),
         'join': ('Join a room', 'Join a room',
                  'Play with a friend who hosts a room. Type the same room password as them and the address '
                  'their Online tab shows. They must press Start game first. Then start matchmaking in the game: '
@@ -1013,7 +1095,7 @@ def run_gui():
     footer_note.pack(pady=(2, 8))
 
     def refresh_footer():
-        footer_note.configure(text='Offline: everything stays on this PC (127.0.0.1)' if mode_var.get() == 'offline'
+        footer_note.configure(text='Offline: everything stays on this PC (127.0.0.1)' if mode_var.get() in ('offline', 'bots')
                               else 'Online room: only a hash of the password and your address are shared; '
                                    'keys and game files are never sent')
 
@@ -1047,8 +1129,9 @@ def run_gui():
         exe = selected_emulator()
         if not main or not exe:
             return
-        online = {'mode': mode_var.get(), 'password': password_var.get().strip(), 'server': server_var.get().strip()}
-        if online['mode'] != 'offline' and not online['password']:
+        online = {'mode': mode_var.get(), 'password': password_var.get().strip(), 'server': server_var.get().strip(),
+                  'bots': bool(bots_var.get())}
+        if online['mode'] in ('join', 'host') and not online['password']:
             show_tab('Online')
             log('Type a room password in the Online tab first: everyone with the same password plays together.',
                 error=True)
@@ -1057,9 +1140,9 @@ def run_gui():
             show_tab('Online')
             log('Type the host\'s address in the Online tab first.', error=True)
             return
-        settings.update(game=game_var.get(), emulator=str(exe), online=online)
+        settings.update(game=game_var.get(), emulator=str(exe), online=online, bot_match=bool(bot_match_var.get()))
         save_settings(settings)
-        session = Session(main, exe, log, online)
+        session = Session(main, exe, log, online, bot_match=bool(bot_match_var.get()))
         state['session'] = session
         refresh()
 
