@@ -7,7 +7,7 @@ stand-in servers, either for yourself (offline, loopback only) or for a room of 
 7 CPU players (see below). New in 1.2.1: the window can be resized, maximized and scrolled; Lichii
 160+ keeps its data in `%APPDATA%\lichii` and is handled; the Windows exe no longer trips antivirus
 false positives (see below). New in 1.3.0: **Patch Lichii**, which lets stock Lichii builds play
-(see below).
+(see below). New in 1.3.1: Bot Match comes in two modes, **Bot Match (Solo)** and **Bot Match (Duo)**.
 
 **Best with a Duskbloods emulator build** (Eglantine, or the Duskbloods Lichii builds v31 and
 later). The game needs its online services even offline, and those builds send it to the
@@ -43,12 +43,16 @@ It gives you a window styled after the game's menus where you pick:
 Press **Start game** and it starts the stand-in servers, launches the emulator with the game, and
 stops the servers when the game closes. Logs are written next to the emulator's data (`Open logs`).
 
-## Bot Match (new in 1.2.0)
+## Bot Match (new in 1.2.0, Solo and Duo since 1.3.1)
 
-The launcher adds **Bot Match** to the game's **Battle Remembrance > Tutorials** list: a complete
-Dusk Battle on the full map, you against 7 CPU players, from the first phase to the final battle.
-It's the game's own hidden full-map mission, switched on by the launcher. At each start it adds the
-mission to the game's regulation and its name and description to the game's menu text (all
+The launcher adds two entries to the game's **Battle Remembrance > Tutorials** list. Each is a
+complete Dusk Battle on the full map with 7 CPU players, from the first phase to the final battle:
+
+* **Bot Match (Solo)**: everyone for themselves (the game's hidden mission 8000).
+* **Bot Match (Duo)**: played in alliances of two (mission 8020; this was "Bot Match" before 1.3.1).
+
+They are the game's own hidden full-map missions, switched on by the launcher. At each start it adds
+the missions to the game's regulation and their names and descriptions to the game's menu text (all
 languages), both built from your own game files. The text goes into the emulator's mod folder as
 `Bot Match (playDB-CNT)`. Untick **Bot Match** in the Setup tab to use the game's own files.
 
@@ -74,7 +78,7 @@ or router port forwards. The Online tab lists the ports.
 | `ONLINE.md` | how to play online with friends (VPN recommendations, ports, troubleshooting) |
 | `assets/` | window art and the icon, taken from the game's title screen |
 | `build_exe.py` | builds the single-file `Play Duskbloods.exe` with PyInstaller (see its notes on the loader) |
-| `dusk_mods.py` | Bot Match: patches the regulation and adds the menu text |
+| `dusk_mods.py` | Bot Match (Solo/Duo): patches the regulation and adds the menu text |
 | `tools/online_shim/` | the Patch Lichii `version.dll` (with source): online support for stock Lichii/Eden |
 | `tools/ooz/` | the open-source Kraken decompressor ooz (GPL-3.0, with source), used to read the game's menu text |
 | `linux/` | `play-duskbloods.sh` (starts the launcher on Linux) and `README-LINUX.md` |

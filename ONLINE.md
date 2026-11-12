@@ -157,18 +157,21 @@ Keep the launcher open while you play. Closing the game stops the room for every
 
 ## Bot Match: a full match against 7 CPU players
 
-Want a real match with nobody else around? The launcher adds **Bot Match** to the game's
-**Battle Remembrance > Tutorials** list. It is a complete Dusk Battle on the full map, you against 7
-CPU players, from the first phase to the final battle. It's the game's own hidden full-map mission,
-switched on by the launcher.
+Want a real match with nobody else around? The launcher adds two Bot Matches to the game's
+**Battle Remembrance > Tutorials** list. Each is a complete Dusk Battle on the full map with 7 CPU
+players, from the first phase to the final battle. They are the game's own hidden full-map missions,
+switched on by the launcher:
+
+* **Bot Match (Solo)**: everyone for themselves.
+* **Bot Match (Duo)**: played in alliances of two.
 
 1. In the launcher's **Setup** tab, leave **Bot Match** ticked (it is on by default).
 2. Press **Start game**. Any Online mode works; **Just me** keeps everything on your PC.
 3. In the game, open the menu, go to **Battle Remembrance** (the third tab) and choose
-   **Bot Match** at the end of the **Tutorials** list.
+   **Bot Match (Solo)** or **Bot Match (Duo)** at the end of the **Tutorials** list.
 
-How it works: at each start the launcher adds the mission to the game's regulation (the game's
-balance data) and its name and description to the game's menu text, in every language. Both are
+How it works: at each start the launcher adds the missions to the game's regulation (the game's
+balance data) and their names and descriptions to the game's menu text, in every language. Both are
 built from your own game files. The text goes into the emulator's mod folder as
 **Bot Match (playDB-CNT)**. Untick **Bot Match** to go back to the game's own files.
 

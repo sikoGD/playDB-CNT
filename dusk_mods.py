@@ -1,11 +1,13 @@
-"""Bot Match: the game's hidden full-map mission (you + 7 CPU players) as a 5th tutorial.
+"""Bot Match: the game's hidden full-map missions (you + 7 CPU players) as extra tutorials:
+Bot Match (Solo), row 8000, everyone for themselves, and Bot Match (Duo), row 8020, played in
+alliances of two.
 
 Everything is built from the player's own game files at launch:
-- regulation_nt.bin (AES-256-CBC, DCX/ZSTD, a BND4 of params): SinglePlayMissionParam row 8020 is
-  moved into the Tutorials tab and its unlock condition is cleared. The launcher writes the result
+- regulation_nt.bin (AES-256-CBC, DCX/ZSTD, a BND4 of params): SinglePlayMissionParam rows 8000 and
+  8020 are moved into the Tutorials tab and their unlock condition is cleared. The launcher writes the result
   into the BCAT cache the game reads its regulation from.
-- msg/<language>/menu_nt.msgbnd.dcx (DCX/Kraken, a BND4 of FMG text): the mission's name and
-  description are added and the archive is written back as DCX/zlib, as a LayeredFS mod in the
+- msg/<language>/menu_nt.msgbnd.dcx (DCX/Kraken, a BND4 of FMG text): the missions' names and
+  descriptions are added and the archive is written back as DCX/zlib, as a LayeredFS mod in the
   emulator's load folder. Kraken is decoded by the bundled ooz.exe (GPL-3.0, source in tools/ooz).
 """
 import hashlib
@@ -23,39 +25,64 @@ from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 TITLE_ID = '0400D1D02399A000'
 MOD_NAME = 'Bot Match (playDB-CNT)'
 STAMP = 'botmatch.json'
-STAMP_VERSION = 1
+STAMP_VERSION = 2
 
 REGULATION_KEY = bytes.fromhex('10B8C2BDAAB0FA1D5EA1CD750CFDBC1368A76603119D56647F4B25069443C64B')
 MISSION_PARAM = 'SinglePlayMissionParam.param'
 MISSION_ROW_SIZE = 0xfc
-BOT_MISSION = 8020           # full map (m10_00), 8 players: you + PCBot_1..7
 TUTORIAL_TAB = 1000          # SinglePlayMissionTabParam row of Battle Remembrance > Tutorials
-TEXT_ID = 10121              # the row's name/description id in the FMGs below
 NAME_FMG, INFO_FMG = 211, 212  # SinglePlayMission_Name, SinglePlayMission_Info
 
-NAME = 'Bot Match'
-INFO = {
-    'en': 'A complete Dusk Battle on the full map: you against 7 CPU players. No other players '
-          'needed.\n\nPlay all 4 phases of a real match, up to the final battle.',
-    'porbr': 'Uma Batalha Crepuscular completa no mapa inteiro: você contra 7 jogadores da CPU. Não '
-             'precisa de outros jogadores.\n\nJogue as quatro fases de uma partida real, até a batalha final.',
+
+class Mission:
+    def __init__(self, row, text_id, name, info):
+        self.row, self.text_id, self.name, self.info = row, text_id, name, info
+
+    def info_for(self, language):
+        return self.info.get(language) or self.info.get(language[:3]) or self.info['en']
+
+
+# Both are the full map (m10_00) with 8 players: you + PCBot_1..7. In the Tutorials list, Solo comes
+# first (the rows' own sort values, 80 and 85).
+SOLO = Mission(8000, 10101, 'Bot Match (Solo)', {
+    'en': 'A complete Dusk Battle on the full map: you against 7 CPU players, everyone for themselves. '
+          'No other players needed.\n\nPlay all 4 phases of a real match, up to the final battle.',
+    'porbr': 'Uma Batalha Crepuscular completa no mapa inteiro: você contra 7 jogadores da CPU, cada um '
+             'por si. Não precisa de outros jogadores.\n\nJogue as quatro fases de uma partida real, até '
+             'a batalha final.',
     'spa': 'Una batalla crepuscular completa en el mapa entero: tú contra 7 jugadores controlados por '
-           'la CPU. No hacen falta otros jugadores.\n\nDisputa las cuatro fases de una partida real, '
-           'hasta el combate final.',
+           'la CPU, cada uno por su cuenta. No hacen falta otros jugadores.\n\nDisputa las cuatro fases '
+           'de una partida real, hasta el combate final.',
     'fra': "Une bataille crépusculaire complète sur toute la carte : vous contre 7 joueurs contrôlés "
-           "par l'ordinateur. Aucun autre joueur n'est nécessaire.\n\nParticipez aux quatre phases "
-           "d'une vraie partie, jusqu'à l'ultime bataille.",
-    'deude': 'Eine vollständige Dämmerungsschlacht auf der ganzen Karte: du gegen 7 Computer-Spieler. '
-             'Andere Spieler sind nicht nötig.\n\nSpiele alle vier Phasen einer echten Partie bis zur '
-             'Entscheidungsschlacht.',
+           "par l'ordinateur, chacun pour soi. Aucun autre joueur n'est nécessaire.\n\nParticipez aux "
+           "quatre phases d'une vraie partie, jusqu'à l'ultime bataille.",
+    'deude': 'Eine vollständige Dämmerungsschlacht auf der ganzen Karte: du gegen 7 Computer-Spieler, '
+             'jeder für sich. Andere Spieler sind nicht nötig.\n\nSpiele alle vier Phasen einer echten '
+             'Partie bis zur Entscheidungsschlacht.',
     'itait': "Una battaglia crepuscolare completa sull'intera mappa: tu contro 7 giocatori controllati "
-             "dalla CPU. Non servono altri giocatori.\n\nGioca tutte le 4 fasi di una vera partita, fino "
-             "alla battaglia finale.",
-}
-
-
-def info_for(language):
-    return INFO.get(language) or INFO.get(language[:3]) or INFO['en']
+             "dalla CPU, ognuno per sé. Non servono altri giocatori.\n\nGioca tutte le 4 fasi di una vera "
+             "partita, fino alla battaglia finale.",
+})
+DUO = Mission(8020, 10121, 'Bot Match (Duo)', {
+    'en': 'A complete Dusk Battle on the full map with 7 CPU players, fought in alliances of two. No '
+          'other players needed.\n\nPlay all 4 phases of a real match, up to the final battle.',
+    'porbr': 'Uma Batalha Crepuscular completa no mapa inteiro com 7 jogadores da CPU, em alianças de '
+             'dois. Não precisa de outros jogadores.\n\nJogue as quatro fases de uma partida real, até a '
+             'batalha final.',
+    'spa': 'Una batalla crepuscular completa en el mapa entero con 7 jugadores controlados por la CPU, '
+           'en alianzas de dos. No hacen falta otros jugadores.\n\nDisputa las cuatro fases de una '
+           'partida real, hasta el combate final.',
+    'fra': "Une bataille crépusculaire complète sur toute la carte avec 7 joueurs contrôlés par "
+           "l'ordinateur, en alliances de deux. Aucun autre joueur n'est nécessaire.\n\nParticipez aux "
+           "quatre phases d'une vraie partie, jusqu'à l'ultime bataille.",
+    'deude': 'Eine vollständige Dämmerungsschlacht auf der ganzen Karte mit 7 Computer-Spielern, in '
+             'Zweierbündnissen. Andere Spieler sind nicht nötig.\n\nSpiele alle vier Phasen einer '
+             'echten Partie bis zur Entscheidungsschlacht.',
+    'itait': "Una battaglia crepuscolare completa sull'intera mappa con 7 giocatori controllati dalla "
+             "CPU, in alleanze di due. Non servono altri giocatori.\n\nGioca tutte le 4 fasi di una vera "
+             "partita, fino alla battaglia finale.",
+})
+MISSIONS = (SOLO, DUO)
 
 
 # --- Regulation -----------------------------------------------------------------------------------
@@ -95,7 +122,7 @@ def bnd_entries(bnd):
 
 
 def patch_regulation(blob):
-    """The regulation with Bot Match in the Tutorials tab."""
+    """The regulation with both Bot Matches in the Tutorials tab."""
     iv, body = blob[:16], blob[16:]
     if len(body) % 16:
         raise ValueError('regulation is not a whole number of AES blocks')
@@ -114,13 +141,14 @@ def patch_regulation(blob):
         rid, offset = struct.unpack_from('<ixxxxQ', bnd, base + 0x40 + i * 24)
         rows[rid] = base + offset
     ordered = sorted(rows.values())
-    if BOT_MISSION not in rows or len(ordered) < 2 or ordered[1] - ordered[0] != MISSION_ROW_SIZE:
+    if len(ordered) < 2 or ordered[1] - ordered[0] != MISSION_ROW_SIZE:
         raise ValueError(f'{MISSION_PARAM} has an unexpected layout')
-    row = rows[BOT_MISSION]
-    if struct.unpack_from('<I', bnd, row + 4)[0] != TEXT_ID or bnd[row + 0x17] != 8:
-        raise ValueError(f'{MISSION_PARAM} row {BOT_MISSION} is not the 8-player full map')
-    struct.pack_into('<I', bnd, row + 8, TUTORIAL_TAB)   # tab: Tutorials
-    struct.pack_into('<i', bnd, row + 0x5c, -1)          # no unlock condition
+    for mission in MISSIONS:
+        row = rows.get(mission.row)
+        if row is None or struct.unpack_from('<I', bnd, row + 4)[0] != mission.text_id or bnd[row + 0x17] != 8:
+            raise ValueError(f'{MISSION_PARAM} row {mission.row} is not the 8-player full map')
+        struct.pack_into('<I', bnd, row + 8, TUTORIAL_TAB)   # tab: Tutorials
+        struct.pack_into('<i', bnd, row + 0x5c, -1)          # no unlock condition
     data = game_zstd(bytes(bnd))
     header = bytearray(plain[:0x4c])
     struct.pack_into('>II', header, 0x1c, len(bnd), len(data))
@@ -212,10 +240,11 @@ def patch_menu(blob, ooz, language):
     entries = {e[1]: e for e in bnd_entries(bnd)}
     if NAME_FMG not in entries or INFO_FMG not in entries:
         raise MissingTables(language)
-    texts = {NAME_FMG: NAME, INFO_FMG: info_for(language)}
+    texts = {NAME_FMG: {m.text_id: m.name for m in MISSIONS},
+             INFO_FMG: {m.text_id: m.info_for(language) for m in MISSIONS}}
     for fid, text in texts.items():
         at, _, _, offset, size = entries[fid]
-        data = fmg_set(bytes(bnd[offset:offset + size]), {TEXT_ID: text})
+        data = fmg_set(bytes(bnd[offset:offset + size]), text)
         bnd += bytes(-len(bnd) % 16)
         struct.pack_into('<qqI', bnd, at + 8, len(data), len(data), len(bnd))
         bnd += data
@@ -309,14 +338,15 @@ def install_text_mod(game, load_dir, ooz, log):
     digest = hashlib.sha256()
     for lang in sorted(sources):
         digest.update(lang.encode() + hashlib.sha256(sources[lang]).digest())
-    wanted = {'version': STAMP_VERSION, 'source': digest.hexdigest(), 'name': NAME, 'info': INFO}
+    wanted = {'version': STAMP_VERSION, 'source': digest.hexdigest(),
+              'missions': [[m.row, m.name, m.info] for m in MISSIONS]}
     stamp = mod / STAMP
     try:
         if json.loads(stamp.read_text(encoding='utf-8')) == wanted:
             return False
     except (OSError, ValueError):
         pass
-    log('Adding the Bot Match name and description to the game text (first start only)...')
+    log('Adding the Bot Match names and descriptions to the game text (first start only)...')
     staging = mod.with_name(MOD_NAME + '.new')
     shutil.rmtree(staging, ignore_errors=True)
     written = 0

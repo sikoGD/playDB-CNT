@@ -39,7 +39,7 @@ def _tolerant(method):
 for _name in ('exists', 'is_file', 'is_dir'):
     setattr(Path, _name, _tolerant(getattr(Path, _name)))
 
-VERSION = '1.3.0'
+VERSION = '1.3.1'
 PORT = 18443
 ROOM_OFFSET = 2          # online play: the room service listens two ports above the game port
 WEB_PORT = 18090
@@ -527,7 +527,7 @@ class Session:
 
     def write_regulation(self, nand):
         """The game reads its regulation from the BCAT cache: the game's own copy, or (Bot Match on)
-        that copy with the full-map mission added to the Tutorials. Written at every start, so the
+        that copy with the full-map missions (Solo and Duo) added to the Tutorials. Written at every start, so the
         option takes effect at once."""
         cache = nand / 'system/save/bcat/0400D1D02399A000/Regulation'
         cache.mkdir(parents=True, exist_ok=True)
@@ -566,13 +566,15 @@ class Session:
             return
         ooz = TOOLS / 'ooz' / ('ooz.exe' if IS_WINDOWS else 'ooz')
         if not ooz.exists():
-            self.log('Bot Match is in Battle Remembrance > Tutorials (its name is not shown on this system).')
+            self.log('Bot Match (Solo) and (Duo) are in Battle Remembrance > Tutorials (their names are not '
+                     'shown on this system).')
             return
         try:
             dusk_mods.install_text_mod(dusk_mods.GameFiles(self.game_main), load, ooz, self.log)
-            self.log('Bot Match is in Battle Remembrance > Tutorials: a full match against 7 CPU players.')
+            self.log('Bot Match (Solo) and Bot Match (Duo) are in Battle Remembrance > Tutorials: a full '
+                     'match against 7 CPU players, alone or in alliances of two.')
         except Exception as error:
-            self.log(f'Bot Match text not added ({error}); the entry shows without a name.')
+            self.log(f'Bot Match text not added ({error}); the entries show without a name.')
 
     def prepare_config(self, nand, save):
         config = config_file_for(self.data)
@@ -1091,8 +1093,8 @@ def run_gui():
     emu_status.pack(fill='x', padx=(16, 0), pady=(2, 6))
 
     bot_match_var = tk.IntVar(value=0 if settings.get('bot_match') is False else 1)
-    tk.Checkbutton(body, text='Bot Match: a full Dusk Battle against 7 CPU players, added to '
-                              'Battle Remembrance > Tutorials', variable=bot_match_var, font=(SERIF, 10), fg=TEXT,
+    tk.Checkbutton(body, text='Bot Match (Solo) and Bot Match (Duo): a full Dusk Battle against 7 CPU '
+                              'players, alone or in alliances of two, added to Battle Remembrance > Tutorials', variable=bot_match_var, font=(SERIF, 10), fg=TEXT,
                    bg=PAGE, selectcolor=ITEM, activebackground=PAGE, activeforeground=GOLD, highlightthickness=0,
                    anchor='w', wraplength=640, justify='left').pack(fill='x', padx=(12, 0), pady=(0, 4))
 
@@ -1117,7 +1119,7 @@ def run_gui():
         'offline': ('Just me', 'Offline test',
                     'Play on your own. The game only talks to the small servers the launcher runs on '
                     'this PC; nothing leaves it. For a full match against 7 CPU players, play Bot Match '
-                    'in Battle Remembrance > Tutorials.'),
+                    '(Solo) or Bot Match (Duo) in Battle Remembrance > Tutorials.'),
         'join': ('Join a room', 'Join a room',
                  'Play with a friend who hosts a room. Type the same room password as them and the address '
                  'their Online tab shows. They must press Start game first. Then start matchmaking in the game: '
