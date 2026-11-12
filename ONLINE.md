@@ -175,10 +175,10 @@ built from your own game files. The text goes into the emulator's mod folder as
 ## Troubleshooting
 
 **"Online connection is required" or "Could not verify Nintendo Switch Online membership" (error 2321-4992) at the title screen.**
-* The emulator isn't a Duskbloods build. Stock Lichii (for example build 160), Eden and yuzu can't send
-  the game to the launcher's servers, so the game never gets online, even for **Just me**. Use
-  Eglantine or a Duskbloods Lichii build (v31 and later). The launcher's Setup tab shows a red
-  warning under the emulator when it lacks this support.
+* The emulator isn't a Duskbloods build. Stock Lichii (for example build 160) and Eden can't send the
+  game to the launcher's servers on their own, so the game never gets online, even for **Just me**.
+  On Windows, press **Patch Lichii** in the Setup tab (launcher 1.3.0+, shown under the emulator
+  when it lacks this support), or use Eglantine or a Duskbloods Lichii build (v31 and later).
 
 **The browser or Windows Defender says the launcher is a virus.**
 * Launcher 1.2.0 and older could be flagged as `Trojan:Win32/Wacatac.B!ml`, a known false positive for

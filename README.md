@@ -6,13 +6,30 @@ stand-in servers, either for yourself (offline, loopback only) or for a room of 
 (online rooms: see [ONLINE.md](ONLINE.md)). New in 1.2.0: **Bot Match**, a full match against
 7 CPU players (see below). New in 1.2.1: the window can be resized, maximized and scrolled; Lichii
 160+ keeps its data in `%APPDATA%\lichii` and is handled; the Windows exe no longer trips antivirus
-false positives (see below).
+false positives (see below). New in 1.3.0: **Patch Lichii**, which lets stock Lichii builds play
+(see below).
 
-**The emulator must be a Duskbloods build** (Eglantine, or the Duskbloods Lichii builds v31 and
-later). The game needs its online services even offline, and only those builds can send it to the
-launcher's servers. Stock Lichii (for example build 160), Eden and yuzu boot the game but stop at
-*"Online connection is required"* / *"Could not verify Nintendo Switch Online membership"*
-(error 2321-4992). The launcher warns when the chosen emulator lacks that support.
+**Best with a Duskbloods emulator build** (Eglantine, or the Duskbloods Lichii builds v31 and
+later). The game needs its online services even offline, and those builds send it to the
+launcher's servers. Stock Lichii (for example build 160) and Eden boot the game but, on their own,
+stop at *"Online connection is required"* / *"Could not verify Nintendo Switch Online membership"*
+(error 2321-4992).
+
+## Patch Lichii (new in 1.3.0, Windows, experimental)
+
+When the chosen emulator lacks the Duskbloods online support, the Setup tab shows a red note and a
+**Patch Lichii** button (**Patch Eden** for Eden). Pressing it (and confirming) adds one file,
+`version.dll`, next to the emulator. **Remove patch** deletes it again.
+
+* The patch only acts when the launcher starts the game. It does what the Duskbloods builds do:
+  sends the game's online names to the launcher's servers and, offline, keeps all traffic on this PC.
+  Lichii started on its own runs exactly as before.
+* The launcher also writes a small certificate archive with its test certificate into its own test
+  NAND, so the game's own encrypted connections trust the launcher's servers.
+* Tested with stock Lichii build 160: the game logs in, reaches the online main menu and starts a
+  game. Performance and graphics are Lichii's own; the Duskbloods builds still run the game better.
+* It never replaces a `version.dll` that belongs to another program. Source and build steps:
+  `tools/online_shim/`.
 
 It gives you a window styled after the game's menus where you pick:
 
@@ -58,6 +75,7 @@ or router port forwards. The Online tab lists the ports.
 | `assets/` | window art and the icon, taken from the game's title screen |
 | `build_exe.py` | builds the single-file `Play Duskbloods.exe` with PyInstaller (see its notes on the loader) |
 | `dusk_mods.py` | Bot Match: patches the regulation and adds the menu text |
+| `tools/online_shim/` | the Patch Lichii `version.dll` (with source): online support for stock Lichii/Eden |
 | `tools/ooz/` | the open-source Kraken decompressor ooz (GPL-3.0, with source), used to read the game's menu text |
 | `linux/` | `play-duskbloods.sh` (starts the launcher on Linux) and `README-LINUX.md` |
 | `mac/` | `Play Duskbloods.command` (starts the launcher on macOS) and `README-MAC.md` |

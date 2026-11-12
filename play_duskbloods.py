@@ -39,7 +39,7 @@ def _tolerant(method):
 for _name in ('exists', 'is_file', 'is_dir'):
     setattr(Path, _name, _tolerant(getattr(Path, _name)))
 
-VERSION = '1.2.1'
+VERSION = '1.3.0'
 PORT = 18443
 ROOM_OFFSET = 2          # online play: the room service listens two ports above the game port
 WEB_PORT = 18090
@@ -62,8 +62,13 @@ SETTINGS = HERE / 'launcher_settings.json'
 ONLINE_GUIDE = 'https://github.com/sikoGD/playDB-CNT/blob/main/ONLINE.md'
 NO_ONLINE_SUPPORT = ('This emulator does not have the Duskbloods online support (it is missing the switches that '
                      'send the game to the launcher\'s servers), so the game stops at "Online connection is '
-                     'required". Stock Lichii, Eden and yuzu builds are like this. Use a Duskbloods build '
-                     '(Eglantine, or the Duskbloods Lichii builds v31 and later).')
+                     'required". Stock Lichii, Eden and yuzu builds are like this. Press "Patch" next to the '
+                     'emulator to add it, or use a Duskbloods build (Eglantine, or the Duskbloods Lichii builds '
+                     'v31 and later).')
+# The online patch for emulators without that support (Windows): a version.dll placed next to the
+# emulator that does what the Duskbloods builds' online switches do (tools/online_shim, with source).
+SHIM = TOOLS / 'online_shim' / 'version.dll'
+SHIM_MARK = b'playDB-CNT online shim'
 
 
 # --- Game and emulator discovery ------------------------------------------------------------
@@ -251,6 +256,41 @@ def has_online_support(exe):
     """False for an emulator without the Duskbloods online switches (stock Lichii, Eden, yuzu):
     the game then stops at "Online connection is required"."""
     return exe_contains(exe, ONLINE_SWITCH) is not False
+
+
+def shim_state(exe):
+    """The online patch next to `exe`: 'none', 'ours' (installed by the launcher) or 'other' (a
+    version.dll from something else, which is left alone)."""
+    target = Path(exe).parent / 'version.dll'
+    try:
+        data = target.read_bytes()
+    except FileNotFoundError:
+        return 'none'
+    except OSError:
+        return 'other'
+    return 'ours' if SHIM_MARK in data else 'other'
+
+
+def can_patch(exe):
+    """An emulator the online patch can be offered for: Windows, no built-in support."""
+    return IS_WINDOWS and SHIM.exists() and not has_online_support(exe) and shim_state(exe) != 'other'
+
+
+def install_shim(exe):
+    """Put (or refresh) the online patch next to the emulator. Raises OSError."""
+    target = Path(exe).parent / 'version.dll'
+    if shim_state(exe) == 'other':
+        raise OSError(f'{target} belongs to another program; it was left alone')
+    data = SHIM.read_bytes()
+    if not target.exists() or target.read_bytes() != data:
+        temporary = target.with_name('version.dll.playdb-new')
+        temporary.write_bytes(data)
+        os.replace(temporary, target)
+
+
+def remove_shim(exe):
+    if shim_state(exe) == 'ours':
+        (Path(exe).parent / 'version.dll').unlink()
 
 
 def data_dir_for(exe):
@@ -651,7 +691,15 @@ class Session:
         if not self.check_keys():
             return None
         if not has_online_support(self.emulator):
-            self.log(NO_ONLINE_SUPPORT, error=True)
+            if shim_state(self.emulator) == 'ours' and SHIM.exists():
+                try:
+                    install_shim(self.emulator)  # keep the patch at this launcher's version
+                except OSError as error:
+                    self.log(f'Could not update the online patch: {error}', error=True)
+                self.log('Online patch active: the playDB-CNT version.dll next to this emulator sends the '
+                         'game to the launcher\'s servers (experimental).')
+            else:
+                self.log(NO_ONLINE_SUPPORT, error=True)
         nand, save = self.seed()
         self.prepare_config(nand, save)
         self.install_mods()
@@ -667,6 +715,14 @@ class Session:
             server_address, ca_file = f'{joined[0]}:{joined[1]}', joined[2]
         elif not self.start_servers(run):
             return None
+        if not has_online_support(self.emulator):
+            # The game's own TLS trusts the certificates in the system's certificate archive; the
+            # Duskbloods builds add the launcher's CA to it, so for other emulators the test NAND
+            # gets an archive holding that CA.
+            try:
+                dusk_mods.install_cert_store(nand, Path(ca_file).read_bytes())
+            except (OSError, ValueError) as error:
+                self.log(f'Could not add the test certificate archive: {error}', error=True)
         env = {k: v for k, v in os.environ.items() if not k.startswith(('EDEN_NX2_', 'EDEN_NATIVE_'))}
         env.update(EDEN_NX2_DIAG_CODEC_CLIENT_REPLY='1', EDEN_NX2_EXPERIMENTAL_CODEC_DECODE='1',
                    EDEN_NX2_EXPERIMENTAL_SYSMIX_OUTPUT='1', EDEN_NX2_SYSMIX_DRAIN_MULTIPLIER='1',
@@ -731,7 +787,7 @@ def save_settings(settings):
 
 def run_gui():
     import tkinter as tk
-    from tkinter import filedialog, ttk
+    from tkinter import filedialog, messagebox, ttk
 
     # Colours sampled from the game's own menus (top tab bar, Arquivo screen, matchmaking button).
     BG = '#1a1214'         # window
@@ -1000,6 +1056,37 @@ def run_gui():
             refresh()
 
     button(emu_frame, 'Browse', browse_emulator).pack(side='left', padx=(8, 0))
+
+    def patch_clicked():
+        exe = selected_emulator()
+        if not exe or not can_patch(exe):
+            return
+        kind = emulator_label(exe).split('  -  ')[0]
+        if shim_state(exe) == 'ours':
+            try:
+                remove_shim(exe)
+                log(f'Online patch removed from {exe.parent}.')
+            except OSError as error:
+                log(f'Could not remove the online patch: {error}', error=True)
+            refresh()
+            return
+        if not messagebox.askokcancel(
+                f'Patch {kind}',
+                f'This {kind} build has no Duskbloods online support, so the game stops at "Online '
+                'connection is required".\n\nThe patch adds one file next to the emulator:\n'
+                f'{exe.parent / "version.dll"}\n\nIt only acts when the launcher starts the game: it sends '
+                'the game\'s online traffic to the launcher\'s servers, as Duskbloods builds do. Started on '
+                f'its own, {kind} works as before. Remove it any time with "Remove patch".\n\n'
+                'Experimental: how far the game gets depends on the emulator build.', parent=root):
+            return
+        try:
+            install_shim(exe)
+            log(f'Online patch added to {exe.parent}. Press Start game.')
+        except OSError as error:
+            log(f'Could not patch {kind}: {error}', error=True)
+        refresh()
+
+    patch_button = button(emu_frame, 'Patch', patch_clicked)
     emu_status = note(body, '', size=9, wrap=640)
     emu_status.pack(fill='x', padx=(16, 0), pady=(2, 6))
 
@@ -1205,13 +1292,30 @@ def run_gui():
         if exe:
             data = data_dir_for(exe)
             keys = (data / 'keys/prod.keys').exists()
-            online = has_online_support(exe)
-            emu_status.configure(text=f'{exe}\nData: {data}' + ('' if keys else '   (no prod.keys yet)') +
-                                 ('' if online else '\nNo Duskbloods online support: the game will stop at '
-                                                    '"Online connection is required". Use a Duskbloods build.'),
-                                 fg=DIM if keys and online else ERR)
+            built_in = has_online_support(exe)
+            patched = not built_in and shim_state(exe) == 'ours'
+            if built_in:
+                extra = ''
+            elif patched:
+                extra = '\nOnline patch active (experimental).'
+            elif can_patch(exe):
+                extra = ('\nNo Duskbloods online support: the game will stop at "Online connection is '
+                         'required". Press Patch to add it, or use a Duskbloods build.')
+            else:
+                extra = ('\nNo Duskbloods online support: the game will stop at "Online connection is '
+                         'required". Use a Duskbloods build.')
+            emu_status.configure(text=f'{exe}\nData: {data}' + ('' if keys else '   (no prod.keys yet)') + extra,
+                                 fg=DIM if keys and (built_in or patched) else ERR)
+            if can_patch(exe):
+                kind = emulator_label(exe).split('  -  ')[0]
+                patch_button.configure(text='Remove patch' if patched else f'Patch {kind}')
+                if not patch_button.winfo_ismapped():
+                    patch_button.pack(side='left', padx=(6, 0))
+            else:
+                patch_button.pack_forget()
         else:
             emu_status.configure(text='No emulator selected', fg=ERR)
+            patch_button.pack_forget()
         running = state['session'] is not None
         state['can_play'] = not running and bool(main) and bool(exe)
         play_label.configure(text='Playing...' if running else 'Start game',

@@ -340,3 +340,127 @@ def install_text_mod(game, load_dir, ooz, log):
 
 def remove_text_mod(load_dir):
     shutil.rmtree(Path(load_dir) / TITLE_ID / MOD_NAME, ignore_errors=True)
+
+
+# --- Certificate archive for emulators without the online patch ---------------------------------
+# The game builds the trust list for its own TLS from the system's certificate archive (system data
+# 0100000000000800, ssl_TrustedCerts.bdf). Duskbloods emulator builds add the launcher's test CA to
+# that list themselves; for other emulators the launcher writes an archive holding that CA into its
+# test NAND: a plaintext NCA (the emulator accepts unencrypted ones) plus a .cnmt in yuzu_meta.
+
+CERT_STORE_TITLE = 0x0100000000000800
+# Every certificate id the system knows: the game asks for the ones it wants, and each answers with
+# the launcher's CA.
+CERT_IDS = [1, 2, 3] + list(range(1000, 1060)) + [65536]
+_CERT_BLOCK = 0x1000
+
+
+def cert_store_bdf(ca_der):
+    """ssl_TrustedCerts.bdf: 'sslT', count, entries {id, status=trusted, size, offset}, DER data."""
+    entries, data = b'', b''
+    for cert_id in CERT_IDS:
+        entries += struct.pack('<iiII', cert_id, 1, len(ca_der), len(CERT_IDS) * 16 + len(data))
+        data += ca_der
+    return b'sslT' + struct.pack('<I', len(CERT_IDS)) + entries + data
+
+
+def _romfs_hash(parent, name):
+    value = parent ^ 123456789
+    for byte in name:
+        value = (((value >> 5) | (value << 27)) & 0xFFFFFFFF) ^ byte
+    return value
+
+
+def romfs_one_file(name, content):
+    """A RomFS image whose root holds one file."""
+    empty = 0xFFFFFFFF
+    name = name.encode()
+    data_offset = 0x200
+    data = content + bytes(-len(content) % 4)
+    dir_meta = struct.pack('<IIIIII', 0, empty, empty, 0, empty, 0)  # root: first file at 0
+    file_meta = struct.pack('<IIQQII', 0, empty, 0, len(content), empty, len(name)) + name
+    file_meta += bytes(-len(file_meta) % 4)
+    dir_hash = [empty] * 3
+    dir_hash[_romfs_hash(0, b'') % 3] = 0
+    file_hash = [empty] * 3
+    file_hash[_romfs_hash(0, name) % 3] = 0
+    tables = []
+    at = data_offset + len(data)
+    out = {}
+    for key, blob in (('dir_hash', struct.pack('<3I', *dir_hash)), ('dir_meta', dir_meta),
+                      ('file_hash', struct.pack('<3I', *file_hash)), ('file_meta', file_meta)):
+        out[key] = (at, len(blob))
+        tables.append(blob)
+        at += len(blob)
+    header = struct.pack('<Q', 0x50)
+    for key in ('dir_hash', 'dir_meta', 'file_hash', 'file_meta'):
+        header += struct.pack('<QQ', *out[key])
+    header += struct.pack('<Q', data_offset)
+    return header + bytes(data_offset - len(header)) + data + b''.join(tables)
+
+
+def plain_data_nca(title_id, romfs):
+    """An unencrypted NCA3 (content type Data) with one RomFS section and SHA-256 hash layers."""
+    blocks = [romfs[i:i + _CERT_BLOCK] for i in range(0, len(romfs), _CERT_BLOCK)]
+    hash_table = b''.join(hashlib.sha256(block).digest() for block in blocks)
+    if len(hash_table) > _CERT_BLOCK:
+        raise ValueError('certificate archive too large')
+    data_at = 0x200  # the hash table fits in one 0x200 sector
+    section = hash_table + bytes(data_at - len(hash_table)) + romfs
+    section += bytes(-len(section) % 0x200)
+
+    fs_header = bytearray(0x200)
+    struct.pack_into('<HBBB', fs_header, 0, 2, 0, 2, 1)  # version, RomFs, Sha256 hash, no encryption
+    fs_header[0x08:0x28] = hashlib.sha256(hash_table).digest()  # master hash
+    struct.pack_into('<ii', fs_header, 0x28, _CERT_BLOCK, 2)
+    struct.pack_into('<QQQQ', fs_header, 0x30, 0, len(hash_table), data_at, len(romfs))
+
+    section_start = 0xC00  # after the header and the four FS headers
+    header = bytearray(0x400)
+    header[0x200:0x204] = b'NCA3'
+    header[0x204] = 0  # distribution: download
+    header[0x205] = 4  # content type: Data
+    struct.pack_into('<QQII', header, 0x208, section_start + len(section), title_id, 0, 0x000D0000)
+    struct.pack_into('<II', header, 0x240, section_start // 0x200, (section_start + len(section)) // 0x200)
+    header[0x280:0x2A0] = hashlib.sha256(bytes(fs_header)).digest()
+    return bytes(header) + bytes(fs_header) + bytes(0x200 * 3) + section
+
+
+def cnmt_for(title_id, nca_id, nca):
+    """A SystemData content meta listing one Data NCA."""
+    head = struct.pack('<QIBBHHHBxxBI4x', title_id, 0, 0x02, 0, 0x10, 1, 0, 0, 0, 0)
+    record = hashlib.sha256(nca).digest() + nca_id + len(nca).to_bytes(6, 'little') + bytes([2, 0])
+    return head + bytes(0x10) + record
+
+
+def install_cert_store(nand, ca_der):
+    """Write the certificate archive holding `ca_der` into `nand` (the launcher's test NAND)."""
+    registered = Path(nand) / 'system/Contents/registered'
+    nca = plain_data_nca(CERT_STORE_TITLE, romfs_one_file('ssl_TrustedCerts.bdf', cert_store_bdf(ca_der)))
+    nca_id = hashlib.sha256(nca).digest()[:16]
+    meta_dir = registered / 'yuzu_meta'
+    meta_dir.mkdir(parents=True, exist_ok=True)
+    stamp = meta_dir / 'playdb-certs.json'
+    try:
+        old = json.loads(stamp.read_text())
+    except (OSError, ValueError):
+        old = {}
+    if old.get('id') == nca_id.hex() and (registered / f'{nca_id.hex()}.nca').exists():
+        return
+    if old.get('id'):  # a previous archive (another CA)
+        for path in (registered / f"{old['id']}.nca", meta_dir / f"{old['id']}.cnmt"):
+            path.unlink(missing_ok=True)
+    (registered / f'{nca_id.hex()}.nca').write_bytes(nca)
+    (meta_dir / f'{nca_id.hex()}.cnmt').write_bytes(cnmt_for(CERT_STORE_TITLE, nca_id, nca))
+    stamp.write_text(json.dumps({'id': nca_id.hex()}))
+
+
+def remove_cert_store(nand):
+    meta_dir = Path(nand) / 'system/Contents/registered/yuzu_meta'
+    try:
+        old = json.loads((meta_dir / 'playdb-certs.json').read_text())
+    except (OSError, ValueError):
+        return
+    for path in (meta_dir.parent / f"{old.get('id')}.nca", meta_dir / f"{old.get('id')}.cnmt",
+                 meta_dir / 'playdb-certs.json'):
+        path.unlink(missing_ok=True)

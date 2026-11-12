@@ -1,0 +1,19 @@
+LIBRARY version
+EXPORTS
+    GetFileVersionInfoA=shim_GetFileVersionInfoA
+    GetFileVersionInfoByHandle=shim_GetFileVersionInfoByHandle
+    GetFileVersionInfoExA=shim_GetFileVersionInfoExA
+    GetFileVersionInfoExW=shim_GetFileVersionInfoExW
+    GetFileVersionInfoSizeA=shim_GetFileVersionInfoSizeA
+    GetFileVersionInfoSizeExA=shim_GetFileVersionInfoSizeExA
+    GetFileVersionInfoSizeExW=shim_GetFileVersionInfoSizeExW
+    GetFileVersionInfoSizeW=shim_GetFileVersionInfoSizeW
+    GetFileVersionInfoW=shim_GetFileVersionInfoW
+    VerFindFileA=shim_VerFindFileA
+    VerFindFileW=shim_VerFindFileW
+    VerInstallFileA=shim_VerInstallFileA
+    VerInstallFileW=shim_VerInstallFileW
+    VerLanguageNameA=shim_VerLanguageNameA
+    VerLanguageNameW=shim_VerLanguageNameW
+    VerQueryValueA=shim_VerQueryValueA
+    VerQueryValueW=shim_VerQueryValueW
