@@ -39,7 +39,7 @@ def _tolerant(method):
 for _name in ('exists', 'is_file', 'is_dir'):
     setattr(Path, _name, _tolerant(getattr(Path, _name)))
 
-VERSION = '1.3.1'
+VERSION = '1.3.2'
 PORT = 18443
 ROOM_OFFSET = 2          # online play: the room service listens two ports above the game port
 WEB_PORT = 18090
@@ -648,8 +648,15 @@ class Session:
         self.processes = [front, server]
         time.sleep(3)
         if server.poll() is not None or front.poll() is not None:
-            self.log(f'A local server stopped at start; see {run}', error=True)
             self.stop()
+            self.log(f'A local server stopped at start; see {run}', error=True)
+            for name in ('server_console.log', 'frontdoor_console.log'):
+                try:
+                    lines = (run / name).read_text(encoding='utf-8', errors='replace').strip().splitlines()
+                except OSError:
+                    lines = []
+                for line in lines[-3:]:  # the reason is the last thing the server printed
+                    self.log(f'  {name}: {line.strip()}', error=True)
             return False
         if hosting:
             try:

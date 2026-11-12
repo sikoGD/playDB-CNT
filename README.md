@@ -7,7 +7,8 @@ stand-in servers, either for yourself (offline, loopback only) or for a room of 
 7 CPU players (see below). New in 1.2.1: the window can be resized, maximized and scrolled; Lichii
 160+ keeps its data in `%APPDATA%\lichii` and is handled; the Windows exe no longer trips antivirus
 false positives (see below). New in 1.3.0: **Patch Lichii**, which lets stock Lichii builds play
-(see below). New in 1.3.1: Bot Match comes in two modes, **Bot Match (Solo)** and **Bot Match (Duo)**.
+(see below). New in 1.3.1: Bot Match comes in two modes, **Bot Match (Solo)** and **Bot Match (Duo)**. New in 1.3.2: hosting a room works on PCs with
+Radmin VPN or Hamachi.
 
 **Best with a Duskbloods emulator build** (Eglantine, or the Duskbloods Lichii builds v31 and
 later). The game needs its online services even offline, and those builds send it to the

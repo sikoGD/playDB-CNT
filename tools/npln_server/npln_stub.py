@@ -2173,8 +2173,9 @@ NAT_IP = None  # set by --nat-ip
 
 
 def is_private(address):
-    """Loopback, RFC 1918, link-local or shared-space (100.64.0.0/10, what mesh VPNs such as
-    Tailscale hand out) IPv4: the only addresses the server may listen on."""
+    """Loopback, RFC 1918, link-local or a gaming VPN's IPv4 (100.64.0.0/10: Tailscale and other
+    mesh VPNs; 26.0.0.0/8: Radmin VPN; 25.0.0.0/8: Hamachi): the only addresses the server may
+    listen on. The launcher offers the same VPN ranges as room addresses."""
     import ipaddress
     try:
         ip = ipaddress.IPv4Address(address)
@@ -2183,7 +2184,7 @@ def is_private(address):
     if ip.is_unspecified:  # 0.0.0.0 would mean every interface, VPN and public ones too
         return False
     return (ip.is_loopback or ip.is_private and not ip.is_global or ip.is_link_local
-            or ip in ipaddress.IPv4Network('100.64.0.0/10'))
+            or any(ip in ipaddress.IPv4Network(n) for n in ('100.64.0.0/10', '26.0.0.0/8', '25.0.0.0/8')))
 STUN_COOKIE = 0x2112A442
 
 
@@ -2351,9 +2352,22 @@ def main():
                                   ('grpc.http2.max_ping_strikes', 0),
                                   ('grpc.keepalive_time_ms', 20000),
                                   ('grpc.keepalive_timeout_ms', 10000)])
+    listening = []
     for host in hosts:
-        if not server.add_secure_port(f'{host}:{args.port}', grpc.ssl_server_credentials([(key, chain)])):
+        try:
+            bound = server.add_secure_port(f'{host}:{args.port}', grpc.ssl_server_credentials([(key, chain)]))
+        except RuntimeError:
+            bound = 0
+        if bound:
+            listening.append(host)
+        elif len(hosts) > 1 and host != hosts[0]:
+            # One of several addresses (an adapter that went away, a VPN being reconnected): carry on
+            # with the others rather than stop the whole room.
+            print(f'warning: cannot listen on {host}:{args.port}; skipped', file=sys.stderr, flush=True)
+            log(ev='listen-skipped', host=host, port=args.port)
+        else:
             raise SystemExit(f'cannot listen on {host}:{args.port} (is that address on this PC?)')
+    hosts = listening
     server.start()
     log(ev='listening', port=args.port, hosts=hosts, nat_ip=NAT_IP)
     server.wait_for_termination()
