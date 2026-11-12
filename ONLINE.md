@@ -174,6 +174,19 @@ built from your own game files. The text goes into the emulator's mod folder as
 
 ## Troubleshooting
 
+**"Online connection is required" or "Could not verify Nintendo Switch Online membership" (error 2321-4992) at the title screen.**
+* The emulator isn't a Duskbloods build. Stock Lichii (for example build 160), Eden and yuzu can't send
+  the game to the launcher's servers, so the game never gets online, even for **Just me**. Use
+  Eglantine or a Duskbloods Lichii build (v31 and later). The launcher's Setup tab shows a red
+  warning under the emulator when it lacks this support.
+
+**The browser or Windows Defender says the launcher is a virus.**
+* Launcher 1.2.0 and older could be flagged as `Trojan:Win32/Wacatac.B!ml`, a known false positive for
+  Python programs packed into one exe. Download 1.2.1 or later, which no longer triggers it.
+
+**The Start game button is off the bottom of the screen.**
+* Scroll the launcher window (mouse wheel, Page Down or the scroll bar), or maximize it (1.2.1+).
+
 **"Could not reach the room at ..."**
 * Did the host press **Start game** first? The room only exists while the host's game runs.
 * Is the address right? It must be the host's address on the network you share. With ZeroTier,

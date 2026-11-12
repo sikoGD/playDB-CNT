@@ -4,7 +4,15 @@ A small launcher (Windows, Linux and macOS) for running **The Duskbloods Network
 emulators (Eglantine, Lichii, Eden-style builds) with the online features served by local
 stand-in servers, either for yourself (offline, loopback only) or for a room of friends
 (online rooms: see [ONLINE.md](ONLINE.md)). New in 1.2.0: **Bot Match**, a full match against
-7 CPU players (see below).
+7 CPU players (see below). New in 1.2.1: the window can be resized, maximized and scrolled; Lichii
+160+ keeps its data in `%APPDATA%\lichii` and is handled; the Windows exe no longer trips antivirus
+false positives (see below).
+
+**The emulator must be a Duskbloods build** (Eglantine, or the Duskbloods Lichii builds v31 and
+later). The game needs its online services even offline, and only those builds can send it to the
+launcher's servers. Stock Lichii (for example build 160), Eden and yuzu boot the game but stop at
+*"Online connection is required"* / *"Could not verify Nintendo Switch Online membership"*
+(error 2321-4992). The launcher warns when the chosen emulator lacks that support.
 
 It gives you a window styled after the game's menus where you pick:
 
@@ -48,7 +56,7 @@ or router port forwards. The Online tab lists the ports.
 | `tools/dusk_server/` | "front door" stand-in for the game's own web API, plus the room matchmaking used by online rooms |
 | `ONLINE.md` | how to play online with friends (VPN recommendations, ports, troubleshooting) |
 | `assets/` | window art and the icon, taken from the game's title screen |
-| `build_exe.py` | builds the single-file `Play Duskbloods.exe` with PyInstaller |
+| `build_exe.py` | builds the single-file `Play Duskbloods.exe` with PyInstaller (see its notes on the loader) |
 | `dusk_mods.py` | Bot Match: patches the regulation and adds the menu text |
 | `tools/ooz/` | the open-source Kraken decompressor ooz (GPL-3.0, with source), used to read the game's menu text |
 | `linux/` | `play-duskbloods.sh` (starts the launcher on Linux) and `README-LINUX.md` |
@@ -60,8 +68,16 @@ or router port forwards. The Online tab lists the ports.
    build is easiest).
 2. Run it, pick the game (`.nup` file with **Browse**, or the game folder with **Folder**) and the emulator.
 3. Have your own `prod.keys` and `title.keys` in the emulator's `keys` folder (portable builds:
-   `user/keys`; Lichii/Eden: `%APPDATA%\eden\keys`). The launcher tells you if they are missing.
-4. Press **Start game**. To play with friends, see [ONLINE.md](ONLINE.md).
+   `user/keys`; Eden and older Lichii: `%APPDATA%\eden\keys`; Lichii 160+: `%APPDATA%\lichii\keys`).
+   The launcher tells you if they are missing.
+4. Press **Start game**. To play with friends, see [ONLINE.md](ONLINE.md). On a small screen, scroll
+   (mouse wheel, Page Down or the scroll bar) or maximize the window to reach **Start game**.
+
+*"Virus detected" when downloading?* Versions up to 1.2.0 were built with PyInstaller's stock
+loader, which Windows Defender's machine-learning check sometimes reports as
+`Trojan:Win32/Wacatac.B!ml` (a known false positive for Python programs packed into one exe).
+Since 1.2.1 the exe uses a loader compiled for this project and scans clean. You can also run the
+launcher from source (`python play_duskbloods.py`, see `build_exe.py` for the packages).
 
 On the first run the launcher creates private test certificates for your PC (in the emulator's
 data folder) and seeds an empty test NAND/save. Packaged builds that already have a

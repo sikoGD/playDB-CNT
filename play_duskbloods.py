@@ -39,7 +39,7 @@ def _tolerant(method):
 for _name in ('exists', 'is_file', 'is_dir'):
     setattr(Path, _name, _tolerant(getattr(Path, _name)))
 
-VERSION = '1.2.0'
+VERSION = '1.2.1'
 PORT = 18443
 ROOM_OFFSET = 2          # online play: the room service listens two ports above the game port
 WEB_PORT = 18090
@@ -60,6 +60,10 @@ PKI_SOURCE_NOTE = 'generated on first run'
 FRONT = TOOLS / 'dusk_server'
 SETTINGS = HERE / 'launcher_settings.json'
 ONLINE_GUIDE = 'https://github.com/sikoGD/playDB-CNT/blob/main/ONLINE.md'
+NO_ONLINE_SUPPORT = ('This emulator does not have the Duskbloods online support (it is missing the switches that '
+                     'send the game to the launcher\'s servers), so the game stops at "Online connection is '
+                     'required". Stock Lichii, Eden and yuzu builds are like this. Use a Duskbloods build '
+                     '(Eglantine, or the Duskbloods Lichii builds v31 and later).')
 
 
 # --- Game and emulator discovery ------------------------------------------------------------
@@ -221,8 +225,37 @@ def emulator_label(exe):
     return f'{kind}  -  {exe.parent.name}'
 
 
+# Strings looked up in the emulator program itself.
+ONLINE_SWITCH = b'EDEN_NX2_ONLINE_SERVER'  # sends the game's online traffic to the launcher's servers
+OWN_LICHII_DATA = b'.lichii-import-'       # Lichii 160+: moved its data from the eden folder to lichii
+_exe_strings = {}
+
+
+def exe_contains(exe, needle):
+    """True/False if the emulator program contains `needle`; None when it cannot be told (an
+    AppImage is compressed, or the file cannot be read)."""
+    try:
+        stat = Path(exe).stat()
+        if Path(exe).name.lower().endswith('.appimage'):
+            return None
+        key = (str(exe), stat.st_size, stat.st_mtime_ns, needle)
+        if key not in _exe_strings:
+            with open(exe, 'rb') as file:
+                _exe_strings[key] = needle in file.read()
+        return _exe_strings[key]
+    except OSError:
+        return None
+
+
+def has_online_support(exe):
+    """False for an emulator without the Duskbloods online switches (stock Lichii, Eden, yuzu):
+    the game then stops at "Online connection is required"."""
+    return exe_contains(exe, ONLINE_SWITCH) is not False
+
+
 def data_dir_for(exe):
-    """Portable builds keep their data in <folder>/user; Lichii and Eden use %APPDATA%\\eden."""
+    """Portable builds keep their data in <folder>/user; Eden and older Lichii use %APPDATA%\\eden,
+    Lichii 160 and later %APPDATA%\\lichii."""
     portable = exe.parent / 'user'
     if portable.is_dir():
         return portable
@@ -232,10 +265,13 @@ def data_dir_for(exe):
         appdata = Path.home() / 'Library/Application Support'
     else:  # Linux: ~/.local/share/<emulator>
         appdata = Path(os.environ.get('XDG_DATA_HOME') or Path.home() / '.local/share')
-    for name in ('eden', 'lichii', 'eglantine', 'yuzu'):
+    names = ['eden', 'lichii', 'eglantine', 'yuzu']
+    if exe_contains(exe, OWN_LICHII_DATA):
+        names = ['lichii', 'eden', 'eglantine', 'yuzu']
+    for name in names:
         if (appdata / name).is_dir():
             return appdata / name
-    return appdata / 'eden'
+    return appdata / names[0]
 
 
 def config_file_for(data):
@@ -614,6 +650,8 @@ class Session:
     def start(self):
         if not self.check_keys():
             return None
+        if not has_online_support(self.emulator):
+            self.log(NO_ONLINE_SUPPORT, error=True)
         nand, save = self.seed()
         self.prepare_config(nand, save)
         self.install_mods()
@@ -726,7 +764,7 @@ def run_gui():
                      if f in families), 'monospace')
     root.title(f'The Duskbloods - Network Test Launcher {VERSION}')
     root.configure(bg=BG)
-    root.resizable(False, False)
+    root.minsize(360, 240)
     try:
         if IS_WINDOWS and (ASSETS / 'icon.ico').exists():
             root.iconbitmap(default=str(ASSETS / 'icon.ico'))
@@ -786,8 +824,63 @@ def run_gui():
         return tk.Label(parent, text=text, font=(SERIF, size), fg=color, bg=bg, anchor='w', justify='left',
                         wraplength=wrap)
 
+    # --- scrolling: everything sits on a canvas, so the window can be resized or maximized and on a
+    # small screen the parts that do not fit (such as Start game) are reached with the scroll bars
+    # or the mouse wheel.
+    outer = tk.Frame(root, bg=BG)
+    outer.pack(fill='both', expand=True)
+    outer.grid_rowconfigure(0, weight=1)
+    outer.grid_columnconfigure(0, weight=1)
+    canvas = tk.Canvas(outer, bg=BG, highlightthickness=0, bd=0, yscrollincrement=20, xscrollincrement=20)
+    canvas.grid(row=0, column=0, sticky='nsew')
+    style.configure('Dusk.Vertical.TScrollbar', background=ITEM, troughcolor=BG, bordercolor=BG,
+                    arrowcolor=GOLD, lightcolor=ITEM, darkcolor=ITEM)
+    style.configure('Dusk.Horizontal.TScrollbar', background=ITEM, troughcolor=BG, bordercolor=BG,
+                    arrowcolor=GOLD, lightcolor=ITEM, darkcolor=ITEM)
+    vbar = ttk.Scrollbar(outer, orient='vertical', command=canvas.yview, style='Dusk.Vertical.TScrollbar')
+    hbar = ttk.Scrollbar(outer, orient='horizontal', command=canvas.xview, style='Dusk.Horizontal.TScrollbar')
+    canvas.configure(yscrollcommand=vbar.set, xscrollcommand=hbar.set)
+    content = tk.Frame(canvas, bg=BG)
+    content_id = canvas.create_window(0, 0, window=content, anchor='nw')
+
+    def fit_content(_event=None):
+        """Stretch the content to the window; past its natural size, scroll instead."""
+        need_w, need_h = content.winfo_reqwidth(), content.winfo_reqheight()
+        have_w, have_h = canvas.winfo_width(), canvas.winfo_height()
+        width, height = max(need_w, have_w), max(need_h, have_h)
+        canvas.itemconfigure(content_id, width=width, height=height)
+        canvas.configure(scrollregion=(0, 0, width, height))
+        for bar, needed, place in ((vbar, need_h > have_h, {'row': 0, 'column': 1, 'sticky': 'ns'}),
+                                   (hbar, need_w > have_w, {'row': 1, 'column': 0, 'sticky': 'ew'})):
+            if needed and not bar.winfo_ismapped():
+                bar.grid(**place)
+            elif not needed and bar.winfo_ismapped():
+                bar.grid_remove()
+
+    canvas.bind('<Configure>', fit_content)
+    content.bind('<Configure>', fit_content)
+
+    def wheel(event):
+        widget = str(event.widget)
+        if widget.startswith(str(log_box)) or 'combobox' in widget.lower():
+            return  # the log and the emulator list scroll themselves
+        if content.winfo_reqheight() <= canvas.winfo_height():
+            return
+        if getattr(event, 'num', 0) in (4, 5):  # Linux
+            step = -1 if event.num == 4 else 1
+        elif IS_MAC:
+            step = -event.delta
+        else:
+            step = -2 * (event.delta // 120 or (1 if event.delta > 0 else -1))
+        canvas.yview_scroll(step, 'units')
+
+    for sequence in ('<MouseWheel>', '<Button-4>', '<Button-5>'):
+        root.bind_all(sequence, wheel, add='+')
+    root.bind('<Prior>', lambda _e: canvas.yview_scroll(-1, 'pages'))
+    root.bind('<Next>', lambda _e: canvas.yview_scroll(1, 'pages'))
+
     # --- top tab bar (L | Setup | Online | R) ---------------------------------------------------
-    tabbar = tk.Frame(root, bg=BAR, highlightthickness=1, highlightbackground=BAR_EDGE)
+    tabbar = tk.Frame(content, bg=BAR, highlightthickness=1, highlightbackground=BAR_EDGE)
     tabbar.pack(fill='x')
     pages, tab_widgets, order = {}, {}, ['Setup', 'Online']
     current = {'tab': 'Setup'}
@@ -826,12 +919,12 @@ def run_gui():
 
     if (ASSETS / 'banner.png').exists():
         banner_image = tk.PhotoImage(file=str(ASSETS / 'banner.png'))
-        tk.Label(root, image=banner_image, bg=BG, bd=0).pack()
+        tk.Label(content, image=banner_image, bg=BG, bd=0).pack()
         root.banner_image = banner_image
     else:
-        tk.Label(root, text='THE DUSKBLOODS', font=(SERIF, 30), fg='#9b3b22', bg=BG).pack(pady=20)
+        tk.Label(content, text='THE DUSKBLOODS', font=(SERIF, 30), fg='#9b3b22', bg=BG).pack(pady=20)
 
-    holder = tk.Frame(root, bg=PAGE, highlightthickness=1, highlightbackground=ITEM_EDGE)
+    holder = tk.Frame(content, bg=PAGE, highlightthickness=1, highlightbackground=ITEM_EDGE)
     holder.pack(fill='both', padx=14, pady=(0, 8))
     body = tk.Frame(holder, bg=PAGE, padx=14, pady=4)
     online_tab = tk.Frame(holder, bg=PAGE, padx=10, pady=6)
@@ -1057,9 +1150,9 @@ def run_gui():
         refresh_footer()
 
     # --- log, the matchmaking-style PLAY bar and button prompts ---------------------------------
-    log_box = tk.Text(root, height=6, font=(MONO, 9), bg=ITEM, fg=TEXT, relief='flat', padx=8, pady=4,
+    log_box = tk.Text(content, height=6, font=(MONO, 9), bg=ITEM, fg=TEXT, relief='flat', padx=8, pady=4,
                       highlightthickness=1, highlightbackground=ITEM_EDGE, wrap='word', state='disabled')
-    log_box.pack(fill='x', padx=14)
+    log_box.pack(fill='both', expand=True, padx=14)  # a larger window gives the log the room
     log_box.tag_configure('error', foreground=ERR)
 
     def log(message, error=False):
@@ -1070,7 +1163,7 @@ def run_gui():
             log_box.configure(state='disabled')
         root.after(0, append)
 
-    footer = tk.Frame(root, bg=BG)
+    footer = tk.Frame(content, bg=BG)
     footer.pack(fill='x', padx=14, pady=(10, 4))
     play = tk.Frame(footer, bg=ITEM, highlightthickness=1, highlightbackground=ITEM_EDGE, cursor='hand2')
     play.pack(side='left')
@@ -1091,7 +1184,7 @@ def run_gui():
         w.bind('<Enter>', lambda _e: hover(True))
         w.bind('<Leave>', lambda _e: hover(False))
 
-    footer_note = tk.Label(root, text='', font=(SERIF, 8), fg=DIM, bg=BG)
+    footer_note = tk.Label(content, text='', font=(SERIF, 8), fg=DIM, bg=BG)
     footer_note.pack(pady=(2, 8))
 
     def refresh_footer():
@@ -1112,8 +1205,11 @@ def run_gui():
         if exe:
             data = data_dir_for(exe)
             keys = (data / 'keys/prod.keys').exists()
-            emu_status.configure(text=f'{exe}\nData: {data}' + ('' if keys else '   (no prod.keys yet)'),
-                                 fg=DIM if keys else ERR)
+            online = has_online_support(exe)
+            emu_status.configure(text=f'{exe}\nData: {data}' + ('' if keys else '   (no prod.keys yet)') +
+                                 ('' if online else '\nNo Duskbloods online support: the game will stop at '
+                                                    '"Online connection is required". Use a Duskbloods build.'),
+                                 fg=DIM if keys and online else ERR)
         else:
             emu_status.configure(text='No emulator selected', fg=ERR)
         running = state['session'] is not None
@@ -1198,6 +1294,14 @@ def run_gui():
     holder.configure(width=max(w for w, _ in sizes), height=max(h for _, h in sizes) + 30)
     holder.pack_propagate(False)
     show_tab('Setup')
+    # Open at the launcher's natural size, but never larger than the screen (minus the taskbar and
+    # title bar): on a small screen the scroll bars appear and the window can be maximized.
+    root.update_idletasks()
+    height = min(content.winfo_reqheight(), root.winfo_screenheight() - 110)
+    room_for_bar = vbar.winfo_reqwidth() if height < content.winfo_reqheight() else 0
+    width = min(content.winfo_reqwidth() + room_for_bar, root.winfo_screenwidth() - 40)
+    canvas.configure(width=width, height=height)
+    root.geometry(f'{width}x{height}')
     log('Choose the game folder and an emulator, then press Start game.')
 
     root.protocol('WM_DELETE_WINDOW', on_close)
