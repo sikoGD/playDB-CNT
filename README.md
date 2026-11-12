@@ -3,7 +3,7 @@
 A small launcher (Windows, Linux and macOS) for running **The Duskbloods Network Test** on Eglantine-based Switch 2
 emulators (Eglantine, Lichii, Eden-style builds) with the online features served by local
 stand-in servers, either for yourself (offline, loopback only) or for a room of friends
-(online rooms: see [ONLINE.md](ONLINE.md)). New in 1.2.0: **Bot Match**, a full match against
+(online rooms, **still in testing and not working yet**: see [ONLINE.md](ONLINE.md)). New in 1.2.0: **Bot Match**, a full match against
 7 CPU players (see below). New in 1.2.1: the window can be resized, maximized and scrolled; Lichii
 160+ keeps its data in `%APPDATA%\lichii` and is handled; the Windows exe no longer trips antivirus
 false positives (see below). New in 1.3.0: **Patch Lichii**, which lets stock Lichii builds play
@@ -57,7 +57,13 @@ the missions to the game's regulation and their names and descriptions to the ga
 languages), both built from your own game files. The text goes into the emulator's mod folder as
 `Bot Match (playDB-CNT)`. Untick **Bot Match** in the Setup tab to use the game's own files.
 
-## Online play (experimental)
+## Online play (in testing, not working yet)
+
+> **Online play does not work yet.** You and your friends can connect (over a VPN or the same
+> network), reach the game's online menus and be matched together, but **the match never starts**:
+> the game goes back to searching after about 15 seconds. The step that starts a match needs a
+> game server the launcher doesn't have yet, and it is still being worked on and tested. To play a
+> full match today, use **Bot Match** (Battle Remembrance > Tutorials), which works offline.
 
 The **Online** tab has three modes: **Just me** (offline, as before), **Host a room** and
 **Join a room**. Everyone who types the **same room password** is matched together: one friend

@@ -4,8 +4,16 @@ The launcher's **Online** tab lets you play The Duskbloods Network Test with fri
 types the **same room password** is matched together. One player **hosts** the room and the others
 **join** it.
 
-> **Experimental.** Online matches are still being tested. If something does not work, see
-> [Reporting a problem](#reporting-a-problem). Those logs are what get it fixed.
+> **Online play does not work yet.** You and your friends can connect (over a VPN or the same
+> network), reach the game's online menus and be matched together, but **the match never starts**:
+> the game goes back to searching after about 15 seconds. The step that starts a match needs a
+> game server the launcher doesn't have yet, and it is still being worked on and tested. To play a
+> full match today, use **Bot Match** (Battle Remembrance > Tutorials), which works offline.
+>
+> What already works: hosting and joining a room, connecting everyone's game to the host (even over
+> a VPN), the game's online menus, and matchmaking (any 2 to 8 players in a room get matched).
+> What doesn't: the match itself. If you want to help test, see
+> [Reporting a problem](#reporting-a-problem): those logs are what get it fixed.
 
 ## Contents
 
@@ -26,8 +34,9 @@ types the **same room password** is matched together. One player **hosts** the r
   reachable from other PCs. The host's PC is the "meeting point" for the room.
 * **Joiners** don't run servers. Their game talks to the host's servers.
 * When players start matchmaking in the game, the host's server groups everyone who used the same
-  room password into one match. The game then **connects the emulators directly to each other**
-  (peer-to-peer).
+  room password into one match. Then each game tries to connect to the match's **game server**.
+  The launcher can't provide that server yet, so this is where it stops today: the game gives up
+  and searches again about 15 seconds later.
 * A match has **2 to 8 players**. As soon as everyone signed in to the room is searching, the match
   starts. If someone in the room isn't searching, the others wait up to 20 seconds for them, then
   start without them.
@@ -206,6 +215,11 @@ built from your own game files. The text goes into the emulator's mod folder as
   own, so keep searching. If one friend is signed in but not searching, the others are matched
   without them after 20 seconds.
 * Everyone must use the same launcher version.
+
+**Matched, but the game goes back to searching after about 15 seconds** (or shows "An error
+occurred while creating match").
+* That is the current limit, not a problem on your side: the match can't start yet (see the note at
+  the top of this guide).
 
 **Matched, but the game says the connection failed or someone drops out.**
 * The direct emulator-to-emulator connection is blocked. Allow the **emulator** through Windows
