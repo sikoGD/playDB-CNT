@@ -299,12 +299,14 @@ def data_dir_for(exe):
     portable = exe.parent / 'user'
     if portable.is_dir():
         return portable
+    appimage_home = exe.parent / (exe.name + '.home')
+    home = appimage_home if appimage_home.is_dir() else Path.home()
     if IS_WINDOWS:
         appdata = Path(os.environ.get('APPDATA', Path.home() / 'AppData/Roaming'))
     elif IS_MAC:  # macOS: ~/Library/Application Support/<emulator>
         appdata = Path.home() / 'Library/Application Support'
     else:  # Linux: ~/.local/share/<emulator>
-        appdata = Path(os.environ.get('XDG_DATA_HOME') or Path.home() / '.local/share')
+        appdata = Path(os.environ.get('XDG_DATA_HOME') or home / '.local/share')
     names = ['eden', 'lichii', 'eglantine', 'yuzu']
     if exe_contains(exe, OWN_LICHII_DATA):
         names = ['lichii', 'eden', 'eglantine', 'yuzu']
@@ -319,7 +321,8 @@ def config_file_for(data):
     config = data / 'config/qt-config.ini'
     if config.exists() or IS_WINDOWS:
         return config
-    base = Path(os.environ.get('XDG_CONFIG_HOME') or Path.home() / '.config')
+    home = next((p for p in data.parents if p.name.endswith('.AppImage.home')), Path.home())
+    base = Path(os.environ.get('XDG_CONFIG_HOME') or home / '.config')
     for name in (data.name, 'eden', 'lichii', 'eglantine', 'yuzu'):
         if (base / name / 'qt-config.ini').exists():
             return base / name / 'qt-config.ini'
