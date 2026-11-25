@@ -685,6 +685,8 @@ class Session:
         except (OSError, ValueError, struct.error):
             data = None
         if not data:
+            self.log('Could not read regulation_nt.bin from the game; its regulation was not written, so the game '
+                     'may say an update is available.')
             return
         if self.bot_match:
             try:
