@@ -676,7 +676,8 @@ class Session:
     def write_regulation(self, nand):
         """The game reads its regulation from the BCAT cache: the game's own copy, or (Bot Match on)
         that copy with the full-map missions (Solo and Duo) added to the Tutorials. Written at every start, so the
-        option takes effect at once."""
+        option takes effect at once. The game reads regulation_nt_<major>_<minor>.bin for its own version: the
+        GAME_SHA build is 0.900.0, so _0_900 (the old _1_0 name is kept too)."""
         cache = nand / 'system/save/bcat/0400D1D02399A000/Regulation'
         cache.mkdir(parents=True, exist_ok=True)
         try:
@@ -684,6 +685,8 @@ class Session:
         except (OSError, ValueError, struct.error):
             data = None
         if not data:
+            self.log('Could not read regulation_nt.bin from the game; its regulation was not written, so the game '
+                     'may say an update is available.')
             return
         if self.bot_match:
             try:
@@ -691,7 +694,8 @@ class Session:
             except Exception as error:  # an unknown regulation: play without Bot Match
                 self.log(f'Bot Match unavailable ({error}); starting with the game\'s own regulation.')
                 self.bot_match = False
-        (cache / 'regulation_nt_1_0.bin').write_bytes(data)
+        for name in ('regulation_nt_1_0.bin', 'regulation_nt_0_900.bin'):  # tied to GAME_SHA: a new build needs both updated
+            (cache / name).write_bytes(data)
 
     def load_directory(self):
         """The emulator's mod folder (load_directory in qt-config.ini, else <data>/load)."""
